@@ -246,6 +246,7 @@ Full runbook: [docs/installation.md](docs/installation.md). Test cases:
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | Components, namespaces, network policies, identities, detailed flows |
 | [docs/installation.md](docs/installation.md) | Runbook, phase by phase, with verification commands |
+| [docs/access.md](docs/access.md) | Observation tools (human checkpoints): what each one is for, how to open it, what to look at per test case |
 | [docs/test-plan.md](docs/test-plan.md) | The five test cases: setup, steps, expected results, evidence |
 | [docs/test-log.md](docs/test-log.md) | Test notebook: what was executed, when, and the results |
 | [docs/open-points.md](docs/open-points.md) | Open questions, decisions taken, items to verify |

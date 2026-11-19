@@ -251,8 +251,8 @@ scripts/agent-alert.sh             # replay an alert; prints tool calls and the 
 
 The kit seeds `openclaw.json` **only on the first start**. To change a running agent, use
 `oc exec deploy/openclaw -c gateway -- node /app/dist/index.js config patch --stdin` and update
-`openclaw.json5` as well. Control UI through the Route: approve the browser device with
-`node /app/dist/index.js devices list|approve <id>` (see the kit's `raw-deployment.md`).
+`openclaw.json5` as well. Control UI login (gateway token + device pairing): see
+[access.md](access.md#openclaw-control-ui).
 
 ### 14–15. Model, traces and heartbeat
 
