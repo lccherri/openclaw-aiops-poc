@@ -1,0 +1,22 @@
+# Reference only - community operator (not supported by Red Hat). Not used by the Makefile.
+apiVersion: openclaw.rocks/v1alpha1
+kind: OpenClawInstance
+metadata:
+  name: aiops-agent
+  namespace: openclaw
+spec:
+  image:
+    repository: ghcr.io/openclaw/openclaw
+    tag: latest                  # pin a released tag
+  envFrom:
+    - secretRef:
+        name: openclaw-credentials
+    - configMapRef:
+        name: openclaw-env
+  resources:
+    requests: { cpu: 500m, memory: 1Gi }
+    limits: { cpu: "2", memory: 4Gi }
+  storage:
+    persistence:
+      enabled: true
+      size: 10Gi

@@ -1,0 +1,27 @@
+# Ansible Automation Platform 2.6 (namespace-scoped). The June/2026 update or newer
+# is required for the GA Ansible MCP server.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: aap
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: aap
+  namespace: aap
+spec:
+  targetNamespaces:
+    - aap
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: ansible-automation-platform-operator
+  namespace: aap
+spec:
+  name: ansible-automation-platform-operator
+  channel: stable-2.6
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace
+  installPlanApproval: Automatic

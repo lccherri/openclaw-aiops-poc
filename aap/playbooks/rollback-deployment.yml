@@ -1,0 +1,24 @@
+---
+# Catalog: rollback-deployment (namespace, deployment) - back to the previous revision
+- name: Roll back a deployment to the previous revision
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - ansible.builtin.import_tasks: _guard.yml
+
+    - name: Roll back
+      kubernetes.core.k8s_rollback:
+        api_version: apps/v1
+        kind: Deployment
+        name: "{{ deployment }}"
+        namespace: "{{ namespace }}"
+      register: rollback
+
+    - name: Wait for the deployment to become available
+      kubernetes.core.k8s_info:
+        kind: Deployment
+        name: "{{ deployment }}"
+        namespace: "{{ namespace }}"
+        wait: true
+        wait_condition: { type: Available, status: "True" }
+        wait_timeout: 300

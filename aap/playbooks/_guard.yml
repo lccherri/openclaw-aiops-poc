@@ -1,0 +1,8 @@
+# Shared guard: every catalog playbook refuses to run outside the allowed namespace,
+# even if a survey or the API is bypassed (defense in depth on top of RBAC).
+- name: Enforce namespace allow-list
+  ansible.builtin.assert:
+    that:
+      - namespace in allowed_namespaces
+      - (deployment | default('x')) is match('^[a-z0-9]([-a-z0-9]*[a-z0-9])?$')
+    fail_msg: "Namespace '{{ namespace }}' is not allowed (allowed: {{ allowed_namespaces }})"

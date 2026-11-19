@@ -1,0 +1,39 @@
+# Read-only access to metrics. Thanos Querier tenancy port (9092) would require a
+# namespace parameter the MCP server does not send, so the full query port (9091) is used
+# with cluster-monitoring-view (read-only metrics; no access to any other API).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus-mcp
+  namespace: aiops-tools
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: aiops-prometheus-mcp-monitoring-view
+subjects:
+  - kind: ServiceAccount
+    name: prometheus-mcp
+    namespace: aiops-tools
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-monitoring-view
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: prometheus-mcp-token
+  namespace: aiops-tools
+  annotations:
+    kubernetes.io/service-account.name: prometheus-mcp
+type: kubernetes.io/service-account-token
+---
+# Service CA bundle injected by OpenShift (trust for thanos-querier TLS)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: service-ca
+  namespace: aiops-tools
+  annotations:
+    service.beta.openshift.io/inject-cabundle: "true"

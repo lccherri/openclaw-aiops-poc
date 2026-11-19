@@ -1,0 +1,3 @@
+# Namespaces the catalog may act on. Changing this list is a code review, not a prompt.
+allowed_namespaces:
+  - demo-apps

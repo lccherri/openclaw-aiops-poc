@@ -1,0 +1,12 @@
+# Dedicated Alertmanager for user workloads + AlertmanagerConfig support, so that
+# demo-apps can route alerts to OpenClaw (webhook) and to Event-Driven Ansible.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: user-workload-monitoring-config
+  namespace: openshift-user-workload-monitoring
+data:
+  config.yaml: |
+    alertmanager:
+      enabled: true
+      enableAlertmanagerConfig: true

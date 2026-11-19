@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - networkpolicies.yaml
+  - mcp-kubernetes/rbac.yaml
+  - mcp-kubernetes/deployment.yaml
+  - mcp-prometheus/rbac.yaml
+  - mcp-prometheus/deployment.yaml
+  - aap-access/rbac.yaml
+  # ansible-mcp/ansiblemcpserver.yaml is applied separately after schema validation
+images:
+  - name: kubernetes-mcp-server
+    newName: quay.io/containers/kubernetes_mcp_server
+    newTag: latest               # PIN before the tests
+  - name: prometheus-mcp-server
+    newName: ghcr.io/pab1it0/prometheus-mcp-server
+    newTag: latest               # PIN before the tests

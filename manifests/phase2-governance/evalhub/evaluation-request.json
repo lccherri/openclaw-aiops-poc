@@ -1,0 +1,13 @@
+{
+  "_comment": "TEMPLATE - EvalHub job request. Verify the API schema in the EvalHub docs. Submit with scripts/evalhub-submit.sh",
+  "model": {
+    "url": "${RHOAI_MAAS_URL}",
+    "name": "${MAAS_MODEL}",
+    "auth": { "secret_ref": "evalhub-model-credentials" }
+  },
+  "benchmarks": [
+    { "id": "garak",  "provider_id": "garak", "config": { "probes": ["promptinject", "dan", "leakreplay"] } },
+    { "id": "toxigen", "provider_id": "lm_evaluation_harness" }
+  ],
+  "experiment": { "name": "aiops-poc-model-eval" }
+}

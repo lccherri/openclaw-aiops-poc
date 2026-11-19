@@ -1,0 +1,278 @@
+---
+# Configures AAP for the POC as code (control layer 06 - action):
+#   - organization, users (agent / approver / EDA) and least-privilege roles
+#   - cluster credential (ServiceAccount aap-automation, write access only in demo-apps)
+#   - project (this Git repository), inventory, the job template catalog with surveys
+#   - workflows with an approval node for every write action
+#   - EDA project, credential and rulebook activation for the known-event case
+#
+# Run from the repository root (needs the env vars from .env):
+#   ansible-galaxy collection install -r aap/config-as-code/requirements.yml
+#   ansible-playbook aap/config-as-code/configure-aap.yml
+#
+# Module/role names were written for AAP 2.6 collections; legacy `ansible.controller.role`
+# is used for role grants because it accepts object names (deprecated but available).
+- name: Configure AAP for the AIOps POC
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    org: AIOps POC
+    aap_url: "{{ lookup('env', 'AAP_GATEWAY_URL') }}"
+    git_repo: "{{ lookup('env', 'GIT_REPO_URL') }}"
+    git_branch: "{{ lookup('env', 'GIT_BRANCH') | default('main', true) }}"
+    k8s_api: "{{ lookup('pipe', 'oc whoami --show-server') }}"
+    k8s_token: "{{ lookup('pipe', 'oc get secret aap-automation-token -n aap -o jsonpath={.data.token} | base64 -d') }}"
+    allowed_ns: demo-apps
+    namespace_question:
+      question_name: Namespace
+      variable: namespace
+      type: multiplechoice
+      choices: [demo-apps]          # survey restricts the namespace (plus the playbook guard)
+      default: demo-apps
+      required: true
+    deployment_question:
+      question_name: Deployment
+      variable: deployment
+      type: text
+      min: 1
+      max: 63
+      required: true
+    catalog:
+      - name: restart-deployment
+        playbook: aap/playbooks/restart-deployment.yml
+        description: Restart an application (rollout restart)
+        extra_questions: []
+        workflow: wf-restart-deployment
+      - name: scale-deployment
+        playbook: aap/playbooks/scale-deployment.yml
+        description: Scale an application (1-5 replicas)
+        extra_questions:
+          - { question_name: Replicas, variable: replicas, type: integer, min: 1, max: 5, default: 2, required: true }
+        workflow: wf-scale-deployment
+      - name: rollback-deployment
+        playbook: aap/playbooks/rollback-deployment.yml
+        description: Roll back to the previous revision
+        extra_questions: []
+        workflow: wf-rollback-deployment
+  environment:
+    CONTROLLER_HOST: "{{ aap_url }}"
+    CONTROLLER_USERNAME: admin
+    CONTROLLER_PASSWORD: "{{ lookup('env', 'AAP_ADMIN_PASSWORD') }}"
+    CONTROLLER_VERIFY_SSL: "false"
+    AAP_HOSTNAME: "{{ aap_url }}"
+    AAP_USERNAME: admin
+    AAP_PASSWORD: "{{ lookup('env', 'AAP_ADMIN_PASSWORD') }}"
+    AAP_VALIDATE_CERTS: "false"
+
+  tasks:
+    # ---------------------------------------------------------------- identity
+    - name: Organization
+      ansible.platform.organization:
+        name: "{{ org }}"
+
+    - name: Users
+      ansible.platform.user:
+        username: "{{ item.name }}"
+        password: "{{ lookup('env', item.pw_env) }}"
+        first_name: "{{ item.desc }}"
+        organizations: ["{{ org }}"]
+        update_secrets: false
+      loop:
+        - { name: openclaw-agent, pw_env: AAP_AGENT_USER_PASSWORD, desc: "OpenClaw agent (catalog only)" }
+        - { name: poc-approver,   pw_env: AAP_APPROVER_PASSWORD,   desc: "Human approver" }
+        - { name: eda-automation, pw_env: AAP_EDA_USER_PASSWORD,   desc: "Event-Driven Ansible" }
+      no_log: true
+
+    # ---------------------------------------------------------------- controller objects
+    - name: Cluster credential (ServiceAccount aap-automation, write only in demo-apps)
+      ansible.controller.credential:
+        name: demo-apps-cluster
+        organization: "{{ org }}"
+        credential_type: OpenShift or Kubernetes API Bearer Token
+        inputs:
+          host: "{{ k8s_api }}"
+          bearer_token: "{{ k8s_token }}"
+          verify_ssl: false
+      no_log: true
+
+    - name: Project (this repository)
+      ansible.controller.project:
+        name: aiops-poc
+        organization: "{{ org }}"
+        scm_type: git
+        scm_url: "{{ git_repo }}"
+        scm_branch: "{{ git_branch }}"
+        scm_update_on_launch: true
+        wait: true
+
+    - name: Inventory
+      ansible.controller.inventory:
+        name: aiops-localhost
+        organization: "{{ org }}"
+
+    - name: Localhost host
+      ansible.controller.host:
+        name: localhost
+        inventory: aiops-localhost
+        variables:
+          ansible_connection: local
+          ansible_python_interpreter: "{{ '{{' }} ansible_playbook_python {{ '}}' }}"
+
+    - name: Write job templates (only launched through approval workflows)
+      ansible.controller.job_template:
+        name: "{{ item.name }}"
+        description: "{{ item.description }}"
+        organization: "{{ org }}"
+        project: aiops-poc
+        inventory: aiops-localhost
+        playbook: "{{ item.playbook }}"
+        credentials: [demo-apps-cluster]
+        survey_enabled: true
+        survey_spec:
+          name: "{{ item.name }}"
+          description: "{{ item.description }}"
+          spec: "{{ [namespace_question, deployment_question] + item.extra_questions }}"
+      loop: "{{ catalog }}"
+      loop_control: { label: "{{ item.name }}" }
+
+    - name: Read-only job template collect-diagnostics (no approval needed)
+      ansible.controller.job_template:
+        name: collect-diagnostics
+        description: Collect events, pod status and logs into a job artifact
+        organization: "{{ org }}"
+        project: aiops-poc
+        inventory: aiops-localhost
+        playbook: aap/playbooks/collect-diagnostics.yml
+        credentials: [demo-apps-cluster]
+        survey_enabled: true
+        survey_spec:
+          name: collect-diagnostics
+          description: Collect diagnostics
+          spec:
+            - "{{ namespace_question }}"
+            - { question_name: App label, variable: app, type: text, min: 1, max: 63, required: true }
+
+    - name: Known-event job template set-memory-limit (EDA only)
+      ansible.controller.job_template:
+        name: set-memory-limit
+        description: Raise memory limit (known OOMKilled event, used by EDA)
+        organization: "{{ org }}"
+        project: aiops-poc
+        inventory: aiops-localhost
+        playbook: aap/playbooks/set-memory-limit.yml
+        credentials: [demo-apps-cluster]
+        ask_variables_on_launch: true
+
+    - name: Approval workflows for every write action
+      ansible.controller.workflow_job_template:
+        name: "{{ item.workflow }}"
+        description: "{{ item.description }} - requires human approval"
+        organization: "{{ org }}"
+        survey_enabled: true
+        survey_spec:
+          name: "{{ item.workflow }}"
+          description: "{{ item.description }}"
+          spec: "{{ [namespace_question, deployment_question] + item.extra_questions }}"
+        workflow_nodes:
+          - identifier: approval
+            unified_job_template:
+              name: "Approve {{ item.name }}"
+              type: workflow_approval
+              description: "Human approval required before {{ item.name }}"
+              timeout: 3600
+            related:
+              success_nodes:
+                - identifier: execute
+          - identifier: execute
+            unified_job_template:
+              name: "{{ item.name }}"
+              type: job_template
+              organization: { name: "{{ org }}" }
+        destroy_current_nodes: true
+      loop: "{{ catalog }}"
+      loop_control: { label: "{{ item.workflow }}" }
+
+    # ---------------------------------------------------------------- least privilege
+    - name: Agent may execute ONLY the approval workflows and the read-only template
+      ansible.controller.role:
+        user: openclaw-agent
+        role: execute
+        workflows: "{{ catalog | map(attribute='workflow') | list }}"
+        job_templates: [collect-diagnostics]
+
+    - name: Approver may approve the workflows (and cannot edit them)
+      ansible.controller.role:
+        user: poc-approver
+        role: approval
+        workflows: "{{ catalog | map(attribute='workflow') | list }}"
+
+    - name: EDA user may execute only the known-event template
+      ansible.controller.role:
+        user: eda-automation
+        role: execute
+        job_templates: [set-memory-limit]
+
+    # ---------------------------------------------------------------- Event-Driven Ansible
+    - name: EDA credential (AAP user eda-automation)
+      ansible.eda.credential:
+        name: aap-eda-automation
+        organization_name: "{{ org }}"
+        credential_type_name: Red Hat Ansible Automation Platform
+        inputs:
+          host: "{{ aap_url }}/api/controller/"
+          username: eda-automation
+          password: "{{ lookup('env', 'AAP_EDA_USER_PASSWORD') }}"
+          verify_ssl: false
+      no_log: true
+
+    - name: EDA project (same repository, rulebooks under extensions/eda/rulebooks)
+      ansible.eda.project:
+        name: aiops-poc-rulebooks
+        organization_name: "{{ org }}"
+        url: "{{ git_repo }}"
+        scm_branch: "{{ git_branch }}"
+
+    - name: Wait for EDA project import
+      ansible.eda.project_info:
+        name: aiops-poc-rulebooks
+      register: eda_project
+      until: eda_project.projects[0].import_state | default('') == 'completed'
+      retries: 30
+      delay: 10
+
+    - name: Rulebook activation (exposes Service aiops-known-events:5000 for Alertmanager)
+      ansible.eda.rulebook_activation:
+        name: aiops-known-events
+        organization_name: "{{ org }}"
+        project_name: aiops-poc-rulebooks
+        rulebook_name: aiops-known-events.yml
+        decision_environment_name: Default Decision Environment
+        eda_credentials: [aap-eda-automation]
+        k8s_service_name: aiops-known-events
+        enabled: true
+
+    # ---------------------------------------------------------------- agent token
+    - name: Create OAuth token for openclaw-agent (used by the Ansible MCP server)
+      ansible.platform.token:
+        scope: write
+        description: OpenClaw agent - Ansible MCP server
+      environment:
+        AAP_USERNAME: openclaw-agent
+        AAP_PASSWORD: "{{ lookup('env', 'AAP_AGENT_USER_PASSWORD') }}"
+      register: agent_token
+      no_log: true
+      when: lookup('env', 'AAP_MCP_TOKEN') | length == 0
+
+    - name: Save the token to a git-ignored file (never printed)
+      ansible.builtin.copy:
+        content: "{{ agent_token.ansible_facts.aap_token.token }}"
+        dest: "{{ playbook_dir }}/../../openclaw-agent.token"
+        mode: "0600"
+      no_log: true
+      when: agent_token is not skipped
+
+    - name: Next step
+      ansible.builtin.debug:
+        msg: "Copy the content of openclaw-agent.token into .env as AAP_MCP_TOKEN, delete the file and run `make secrets`."
+      when: agent_token is not skipped

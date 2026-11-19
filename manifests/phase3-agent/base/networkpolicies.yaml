@@ -1,0 +1,130 @@
+# Control layer 01 - isolation. Default-deny in both directions, then explicit allows.
+# The agent can reach ONLY: DNS, the model path (MaaS gateway / guardrails), the MCP
+# servers, the Ansible MCP server and MLflow. No Kubernetes API, no Internet.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: openclaw
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress", "Egress"]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-dns
+  namespace: openclaw
+spec:
+  podSelector: {}
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: openshift-dns
+      ports:
+        - { protocol: UDP, port: 5353 }
+        - { protocol: TCP, port: 5353 }
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-model-path
+  namespace: openclaw
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: openclaw
+  policyTypes: ["Egress"]
+  egress:
+    # RHOAI MaaS gateway (Gateway API data plane runs in openshift-ingress).
+    # Use the internal Service address of the gateway in MAAS_BASE_URL.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: openshift-ingress
+      ports:
+        - { protocol: TCP, port: 443 }
+        - { protocol: TCP, port: 80 }
+        - { protocol: TCP, port: 8443 }
+    # NeMo Guardrails (only used by topology B: agent -> guardrails -> MaaS).
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: aiops-governance
+      ports:
+        - { protocol: TCP, port: 8000 }
+        - { protocol: TCP, port: 8443 }
+    # Fallback "direct to internal MaaS" (risk table): uncomment and set the CIDR.
+    # - to:
+    #     - ipBlock:
+    #         cidr: 203.0.113.10/32
+    #   ports:
+    #     - { protocol: TCP, port: 443 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-tools
+  namespace: openclaw
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: openclaw
+  policyTypes: ["Egress"]
+  egress:
+    # Read-only MCP servers (Kubernetes + Prometheus)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: aiops-tools
+      ports:
+        - { protocol: TCP, port: 8080 }
+    # Ansible MCP server (AAP namespace)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: aap
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/component: mcp-server    # VERIFY label after deploying AnsibleMCPServer
+      ports:
+        - { protocol: TCP, port: 8080 }
+        - { protocol: TCP, port: 8443 }
+    # MLflow (traces via OTLP/HTTP)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: redhat-ods-applications
+      ports:
+        - { protocol: TCP, port: 8443 }
+        - { protocol: TCP, port: 5000 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-ui-and-alerts
+  namespace: openclaw
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: openclaw
+  policyTypes: ["Ingress"]
+  ingress:
+    # Control UI through the OpenShift router (Route)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              policy-group.network.openshift.io/ingress: ""
+      ports:
+        - { protocol: TCP, port: 18789 }
+    # Alertmanager (user workload monitoring) -> OpenClaw webhook
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: openshift-user-workload-monitoring
+      ports:
+        - { protocol: TCP, port: 18789 }

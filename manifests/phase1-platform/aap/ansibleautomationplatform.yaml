@@ -1,0 +1,17 @@
+# Lean AAP 2.6: Platform Gateway + Controller + EDA. Automation Hub and Lightspeed disabled.
+# The Ansible MCP server is deployed separately (manifests/phase4-tools/ansible-mcp).
+apiVersion: aap.ansible.com/v1alpha1
+kind: AnsibleAutomationPlatform
+metadata:
+  name: aap
+  namespace: aap
+spec:
+  public_base_url: ""          # optional: set to https://aap-aap.apps.<cluster-domain>
+  controller:
+    disabled: false
+  eda:
+    disabled: false
+  hub:
+    disabled: true
+  lightspeed:
+    disabled: true

@@ -1,0 +1,33 @@
+---
+# Test case 3 - known event handled without AI.
+# Alertmanager (route=eda) -> this rulebook -> job template "set-memory-limit".
+# Lives under extensions/eda/rulebooks/ because EDA projects only discover rulebooks there
+# (or in rulebooks/) at the repository root.
+- name: AIOps known events
+  hosts: all
+  sources:
+    - ansible.eda.alertmanager:
+        host: 0.0.0.0
+        port: 5000
+        data_alerts_path: alerts
+        data_host_path: ""
+  rules:
+    - name: OOMKilled demo worker -> raise memory limit
+      condition: >-
+        event.alert.status == "firing" and
+        event.alert.labels.alertname == "DemoAppOOMKilled" and
+        event.alert.labels.namespace == "demo-apps"
+      throttle:
+        once_within: 10 minutes
+        group_by_attributes:
+          - event.alert.labels.deployment
+      action:
+        run_job_template:
+          name: set-memory-limit
+          organization: AIOps POC
+          job_args:
+            extra_vars:
+              namespace: "{{ event.alert.labels.namespace }}"
+              deployment: "{{ event.alert.labels.deployment }}"
+              container: "{{ event.alert.labels.container }}"
+              memory_limit: 256Mi

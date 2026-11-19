@@ -1,0 +1,38 @@
+# Routing in the user-workload Alertmanager:
+#   route=eda         -> Event-Driven Ansible (deterministic remediation, no model)
+#   route=aiops-agent -> OpenClaw webhook (diagnosis by the agent)
+apiVersion: monitoring.coreos.com/v1beta1
+kind: AlertmanagerConfig
+metadata:
+  name: aiops-routing
+  namespace: demo-apps
+spec:
+  route:
+    receiver: aiops-agent
+    groupBy: ["alertname", "pod"]
+    groupWait: 30s
+    groupInterval: 5m
+    repeatInterval: 4h
+    routes:
+      - receiver: eda
+        matchers:
+          - { name: route, value: eda, matchType: "=" }
+      - receiver: aiops-agent
+        matchers:
+          - { name: route, value: aiops-agent, matchType: "=" }
+  receivers:
+    - name: aiops-agent
+      webhookConfigs:
+        - url: http://openclaw.openclaw.svc:18789/hooks/alertmanager
+          sendResolved: false
+          httpConfig:
+            authorization:
+              type: Bearer
+              credentials:
+                name: alertmanager-openclaw-hook   # created by scripts/create-secrets.sh
+                key: token
+    - name: eda
+      webhookConfigs:
+        # Service created by the EDA rulebook activation (k8s service name "aiops-known-events")
+        - url: http://aiops-known-events.aap.svc:5000/endpoint
+          sendResolved: false

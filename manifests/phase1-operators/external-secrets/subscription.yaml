@@ -1,0 +1,25 @@
+# External Secrets Operator for Red Hat OpenShift (identity layer: credentials are
+# synced from a restricted "vault" namespace, never written in agent config).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: external-secrets-operator
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: external-secrets-operator
+  namespace: external-secrets-operator
+spec: {}   # AllNamespaces
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: openshift-external-secrets-operator
+  namespace: external-secrets-operator
+spec:
+  name: openshift-external-secrets-operator
+  channel: stable-v1
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace
+  installPlanApproval: Automatic

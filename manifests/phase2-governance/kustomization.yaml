@@ -1,0 +1,9 @@
+# Phase 2 - model governance. MaaS external-model/subscription templates are opt-in
+# (see maas/README.md). Guardrails require scripts/render-guardrails.sh first.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - maas
+  - guardrails
+  - mlflow
+  - evalhub

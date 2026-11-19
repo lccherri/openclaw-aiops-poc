@@ -1,0 +1,11 @@
+# Enables monitoring for user-defined projects (needed for demo-app alerts).
+# WARNING: if this ConfigMap already exists in your cluster, merge the key
+# manually instead of applying this file (it would overwrite existing settings).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-monitoring-config
+  namespace: openshift-monitoring
+data:
+  config.yaml: |
+    enableUserWorkload: true

@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - case1-crashloop/app.yaml
+  - case3-oom/app.yaml
+  - case4-injection/app.yaml
+  - alerting/prometheusrules.yaml
+  - alerting/alertmanagerconfig.yaml

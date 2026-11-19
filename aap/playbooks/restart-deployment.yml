@@ -1,0 +1,30 @@
+---
+# Catalog: restart-deployment (namespace, deployment)
+- name: Restart a deployment (rollout restart)
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - ansible.builtin.import_tasks: _guard.yml
+
+    - name: Trigger rollout restart
+      kubernetes.core.k8s:
+        state: patched
+        kind: Deployment
+        name: "{{ deployment }}"
+        namespace: "{{ namespace }}"
+        definition:
+          spec:
+            template:
+              metadata:
+                annotations:
+                  kubectl.kubernetes.io/restartedAt: "{{ now(utc=true).isoformat() }}"
+                  aiops.poc/restarted-by: "aap-job-{{ tower_job_id | default('local') }}"
+
+    - name: Wait for the rollout to complete
+      kubernetes.core.k8s_info:
+        kind: Deployment
+        name: "{{ deployment }}"
+        namespace: "{{ namespace }}"
+        wait: true
+        wait_condition: { type: Available, status: "True" }
+        wait_timeout: 300

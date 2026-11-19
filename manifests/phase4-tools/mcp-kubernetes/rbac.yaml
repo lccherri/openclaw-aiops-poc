@@ -1,0 +1,21 @@
+# Control layer 03 - tools. The Kubernetes MCP server runs with a ServiceAccount that
+# has the built-in "view" ClusterRole bound ONLY in demo-apps (no Secrets, no writes).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kubernetes-mcp
+  namespace: aiops-tools
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kubernetes-mcp-view
+  namespace: demo-apps
+subjects:
+  - kind: ServiceAccount
+    name: kubernetes-mcp
+    namespace: aiops-tools
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view

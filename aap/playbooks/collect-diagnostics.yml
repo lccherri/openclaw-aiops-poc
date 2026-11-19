@@ -1,0 +1,46 @@
+---
+# Catalog: collect-diagnostics (namespace, app) - read-only. Collects pods, events,
+# describe-like data and logs into a job artifact (set_stats) visible in AAP.
+- name: Collect diagnostics for an application
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - ansible.builtin.import_tasks: _guard.yml
+
+    - name: Pods of the app
+      kubernetes.core.k8s_info:
+        kind: Pod
+        namespace: "{{ namespace }}"
+        label_selectors: ["app={{ app }}"]
+      register: pods
+
+    - name: Namespace events
+      kubernetes.core.k8s_info:
+        kind: Event
+        namespace: "{{ namespace }}"
+      register: events
+
+    - name: Logs (current and previous container)
+      kubernetes.core.k8s_log:
+        namespace: "{{ namespace }}"
+        name: "{{ item.0.metadata.name }}"
+        previous: "{{ item.1 }}"
+        tail_lines: 100
+      loop: "{{ pods.resources | product([false, true]) | list }}"
+      loop_control:
+        label: "{{ item.0.metadata.name }} previous={{ item.1 }}"
+      register: logs
+      ignore_errors: true
+
+    - name: Publish diagnostics as job artifact
+      ansible.builtin.set_stats:
+        data:
+          diagnostics:
+            app: "{{ app }}"
+            pods: "{{ pods.resources | map(attribute='metadata.name') | list }}"
+            pod_status: "{{ pods.resources | map(attribute='status.containerStatuses') | list }}"
+            events: >-
+              {{ (events.resources
+                  | selectattr('involvedObject.name', 'search', app)
+                  | map(attribute='message') | list)[-20:] }}
+            logs: "{{ logs.results | selectattr('log_lines', 'defined') | map(attribute='log_lines') | list }}"

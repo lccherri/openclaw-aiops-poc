@@ -1,0 +1,50 @@
+# Control layer 06 - action. The ONLY identity with write access to demo-apps belongs to
+# AAP (not to the agent). It can patch/scale/roll back Deployments in demo-apps and nothing
+# else; it cannot delete namespaces or touch other projects.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: aap-automation
+  namespace: aap
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: aap-automation-token
+  namespace: aap
+  annotations:
+    kubernetes.io/service-account.name: aap-automation
+type: kubernetes.io/service-account-token
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: aap-remediation
+  namespace: demo-apps
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list", "watch", "patch", "update"]
+  - apiGroups: ["apps"]
+    resources: ["deployments/scale"]
+    verbs: ["get", "patch", "update"]
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "events", "configmaps", "services"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["events.k8s.io"]
+    resources: ["events"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: aap-remediation
+  namespace: demo-apps
+subjects:
+  - kind: ServiceAccount
+    name: aap-automation
+    namespace: aap
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: aap-remediation

@@ -1,0 +1,34 @@
+# Alerts for the demo apps. Rules in user namespaces are evaluated by Thanos Ruler and
+# can use platform metrics (kube-state-metrics) scoped to this namespace.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: demo-apps-alerts
+  namespace: demo-apps
+spec:
+  groups:
+    - name: demo-apps.rules
+      rules:
+        # Case 1 and 4 -> routed to OpenClaw (needs diagnosis). report-worker is excluded:
+        # its OOM loop is a known event handled by EDA (case 3).
+        - alert: DemoAppCrashLooping
+          expr: max by (namespace, pod, container) (kube_pod_container_status_waiting_reason{namespace="demo-apps", container!="report-worker", reason="CrashLoopBackOff"}) == 1
+          for: 1m
+          labels:
+            severity: warning
+            route: aiops-agent
+          annotations:
+            summary: "Container {{ $labels.container }} of pod {{ $labels.pod }} is in CrashLoopBackOff"
+        # Case 3 -> known event, routed to Event-Driven Ansible (no AI)
+        - alert: DemoAppOOMKilled
+          expr: |
+            max by (namespace, pod, container) (kube_pod_container_status_last_terminated_reason{namespace="demo-apps", container="report-worker", reason="OOMKilled"}) == 1
+            and on (namespace, pod, container)
+            increase(kube_pod_container_status_restarts_total{namespace="demo-apps", container="report-worker"}[5m]) > 0
+          for: 0m
+          labels:
+            severity: warning
+            route: eda
+            deployment: report-worker
+          annotations:
+            summary: "Container {{ $labels.container }} was OOMKilled"

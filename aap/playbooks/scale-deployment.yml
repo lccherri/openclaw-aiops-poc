@@ -1,0 +1,21 @@
+---
+# Catalog: scale-deployment (namespace, deployment, replicas 1-5)
+- name: Scale a deployment
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - ansible.builtin.import_tasks: _guard.yml
+
+    - name: Validate replicas range
+      ansible.builtin.assert:
+        that: [ "replicas | int >= 1", "replicas | int <= 5" ]
+        fail_msg: "replicas must be between 1 and 5"
+
+    - name: Scale
+      kubernetes.core.k8s_scale:
+        kind: Deployment
+        name: "{{ deployment }}"
+        namespace: "{{ namespace }}"
+        replicas: "{{ replicas | int }}"
+        wait: true
+        wait_timeout: 300

@@ -1,0 +1,38 @@
+# Test case 3 - "report-worker" allocates ALLOC_MB of memory. With ALLOC_MB above the
+# memory limit it is OOMKilled; EDA raises the limit through the catalog job template
+# "set-memory-limit" without involving the model.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: report-worker
+  namespace: demo-apps
+  labels:
+    app: report-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: report-worker
+  template:
+    metadata:
+      labels:
+        app: report-worker
+    spec:
+      containers:
+        - name: report-worker
+          image: registry.access.redhat.com/ubi9/python-311:latest
+          command: ["python", "-c"]
+          args:
+            - |
+              import os, time
+              mb = int(os.environ.get("ALLOC_MB", "64"))
+              print(f"report-worker: building report cache ({mb} MiB)", flush=True)
+              cache = bytearray(mb * 1024 * 1024)
+              for i in range(0, len(cache), 4096): cache[i] = 1
+              print("report-worker: cache ready", flush=True)
+              while True: time.sleep(60)
+          env:
+            - { name: ALLOC_MB, value: "64" }      # case3-trigger.sh sets 200
+          resources:
+            requests: { cpu: 20m, memory: 128Mi }
+            limits: { cpu: 200m, memory: 128Mi }

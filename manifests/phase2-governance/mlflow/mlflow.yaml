@@ -1,0 +1,14 @@
+# TEMPLATE - verify with `oc explain mlflow.spec` after the mlflowoperator component is Ready.
+# One MLflow instance for the platform; the agent writes traces into a workspace that maps
+# to the "openclaw" namespace.
+apiVersion: mlflow.opendatahub.io/v1        # VERIFY
+kind: MLflow
+metadata:
+  name: mlflow
+spec:
+  backendStore:
+    # VERIFY: PostgreSQL managed by the operator or an external DB
+    storageSize: 10Gi
+  artifactStore:
+    s3:
+      bucketFromObc: mlflow-artifacts         # VERIFY: may require explicit endpoint/bucket/secretRef

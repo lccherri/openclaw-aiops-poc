@@ -1,0 +1,95 @@
+{
+  // OpenClaw configuration for the AIOps POC (JSON5).
+  // ${VAR} values are resolved by OpenClaw from the container environment
+  // (Secret openclaw-credentials + ConfigMap openclaw-env). OpenClaw validates keys
+  // strictly: check with `openclaw doctor` inside the pod for the version in use.
+
+  "gateway": {
+    "mode": "local",
+    "bind": "lan",
+    "port": 18789,
+    "auth": { "mode": "token", "token": "${OPENCLAW_GATEWAY_TOKEN}" },
+    "controlUi": { "enabled": true }
+  },
+
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "rhoai-maas": {
+        "baseUrl": "${MAAS_BASE_URL}",
+        "apiKey": "${MAAS_API_KEY}",
+        "api": "openai-completions",
+        "models": [
+          { "id": "${MAAS_MODEL}", "name": "AIOps POC model (via RHOAI MaaS)", "contextWindow": 128000, "maxTokens": 8192 }
+        ]
+      }
+    }
+  },
+
+  "agents": {
+    "defaults": {
+      "model": { "primary": "rhoai-maas/${MAAS_MODEL}" },
+      "workspace": "/data/workspace",
+      "heartbeat": { "every": "${OPENCLAW_HEARTBEAT}" },
+      "sandbox": { "mode": "off" }
+    }
+  },
+
+  "tools": {
+    // Control layers 01/03: no shell, no file writes, no browser.
+    // The agent acts on the cluster only through MCP tools.
+    "deny": ["exec", "process", "write", "edit", "apply_patch", "browser", "canvas", "nodes"]
+  },
+
+  // MCP servers. VERIFY the key name for the OpenClaw version in use (see docs/open-points.md).
+  "mcp": {
+    "servers": {
+      "kubernetes": { "transport": "streamable-http", "url": "http://kubernetes-mcp.aiops-tools.svc:8080/mcp" },
+      "prometheus": { "transport": "streamable-http", "url": "http://prometheus-mcp.aiops-tools.svc:8080/mcp" },
+      "ansible": {
+        "transport": "streamable-http",
+        "url": "${AAP_MCP_URL}",
+        "headers": { "Authorization": "Bearer ${AAP_MCP_TOKEN}" }
+      }
+    }
+  },
+
+  "hooks": {
+    "enabled": true,
+    "token": "${OPENCLAW_HOOKS_TOKEN}",
+    "path": "/hooks",
+    "mappings": [
+      {
+        "id": "alertmanager",
+        "match": { "path": "alertmanager" },
+        "action": "agent",
+        "name": "Alertmanager",
+        "wakeMode": "now",
+        "deliver": true,
+        "messageTemplate": "ALERT {{status}} from Alertmanager. alertname={{commonLabels.alertname}} namespace={{commonLabels.namespace}} severity={{commonLabels.severity}} summary={{commonAnnotations.summary}}. Follow the incident procedure in AGENTS.md: diagnose with read-only tools and report root cause and a proposed action."
+      }
+    ]
+  },
+
+  "plugins": {
+    "entries": { "diagnostics-otel": { "enabled": true } }
+  },
+
+  // Traces to MLflow over OTLP/HTTP (control layer 05).
+  "diagnostics": {
+    "enabled": true,
+    "otel": {
+      "enabled": true,
+      "endpoint": "${MLFLOW_OTLP_ENDPOINT}",
+      "protocol": "http/protobuf",
+      "serviceName": "openclaw-aiops-agent",
+      "traces": true,
+      "metrics": false,
+      "logs": false,
+      "headers": {
+        "Authorization": "Bearer ${MLFLOW_TOKEN}",
+        "x-mlflow-experiment-id": "${MLFLOW_EXPERIMENT_ID}"
+      }
+    }
+  }
+}

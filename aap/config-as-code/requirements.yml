@@ -1,0 +1,8 @@
+# Collections needed to run configure-aap.yml from a workstation.
+# ansible.controller / ansible.platform / ansible.eda (certified) come from
+# Red Hat Automation Hub (console.redhat.com) - configure ansible.cfg with your token.
+collections:
+  - name: ansible.platform
+  - name: ansible.controller
+  - name: ansible.eda
+  - name: kubernetes.core

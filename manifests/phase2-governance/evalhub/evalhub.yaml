@@ -1,0 +1,8 @@
+# TEMPLATE - verify with `oc explain evalhub.spec` (TrustyAI EvalHub, GA in RHOAI 3.5).
+apiVersion: trustyai.opendatahub.io/v1alpha1   # VERIFY
+kind: EvalHub
+metadata:
+  name: evalhub
+  namespace: aiops-governance
+spec:
+  replicas: 1

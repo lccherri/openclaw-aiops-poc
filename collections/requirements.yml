@@ -1,0 +1,5 @@
+# Collections used by the job templates (installed by the execution environment /
+# project sync) and by EDA rulebooks.
+collections:
+  - name: kubernetes.core
+  - name: ansible.eda

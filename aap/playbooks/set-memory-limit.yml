@@ -1,0 +1,40 @@
+---
+# Known-event remediation used ONLY by Event-Driven Ansible (test case 3).
+# Not exposed to the agent: the AAP user "openclaw-agent" has no permission on it.
+- name: Raise the memory limit of a deployment container
+  hosts: localhost
+  gather_facts: false
+  vars:
+    allowed_memory_limits: ["256Mi", "384Mi", "512Mi"]
+    memory_limit: "256Mi"
+  tasks:
+    - ansible.builtin.import_tasks: _guard.yml
+
+    - name: Validate memory value against the allow-list
+      ansible.builtin.assert:
+        that: memory_limit in allowed_memory_limits
+
+    - name: Patch memory request/limit
+      kubernetes.core.k8s:
+        state: patched
+        kind: Deployment
+        name: "{{ deployment }}"
+        namespace: "{{ namespace }}"
+        definition:
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: "{{ container | default(deployment) }}"
+                    resources:
+                      requests: { memory: "{{ memory_limit }}" }
+                      limits: { memory: "{{ memory_limit }}" }
+
+    - name: Wait for the deployment to become available
+      kubernetes.core.k8s_info:
+        kind: Deployment
+        name: "{{ deployment }}"
+        namespace: "{{ namespace }}"
+        wait: true
+        wait_condition: { type: Available, status: "True" }
+        wait_timeout: 300

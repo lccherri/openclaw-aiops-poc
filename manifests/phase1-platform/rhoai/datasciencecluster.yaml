@@ -1,0 +1,49 @@
+# Lean DataScienceCluster for a GPU-less POC: only governance components are Managed.
+# Schema taken from the rhods-operator 3.5.3 CSV (datasciencecluster.opendatahub.io/v2).
+apiVersion: datasciencecluster.opendatahub.io/v2
+kind: DataScienceCluster
+metadata:
+  name: default-dsc
+spec:
+  components:
+    dashboard:
+      managementState: Managed
+    kserve:
+      managementState: Managed       # required by Models-as-a-Service
+      modelsAsService:
+        managementState: Managed     # MaaS: per-agent subscription + quota
+      nim:
+        managementState: Removed
+      wva:
+        managementState: Removed
+    trustyai:
+      managementState: Managed       # NeMo Guardrails + EvalHub (Garak red teaming)
+    mlflowoperator:
+      managementState: Managed       # tracing of agent decisions
+    # --- not used in this POC ---
+    aigateway:
+      managementState: Removed
+    aipipelines:
+      managementState: Removed
+    feastoperator:
+      managementState: Removed
+    kueue:
+      managementState: Removed
+    llamastackoperator:
+      managementState: Removed
+    mcplifecycleoperator:
+      managementState: Removed       # candidate for phase 2 (MCP server lifecycle)
+    modelregistry:
+      managementState: Removed
+    ogx:
+      managementState: Removed
+    ray:
+      managementState: Removed
+    sparkoperator:
+      managementState: Removed
+    trainer:
+      managementState: Removed
+    trainingoperator:
+      managementState: Removed
+    workbenches:
+      managementState: Removed

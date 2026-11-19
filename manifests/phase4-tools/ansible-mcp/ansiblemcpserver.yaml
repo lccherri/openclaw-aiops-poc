@@ -1,0 +1,13 @@
+# TEMPLATE - Ansible MCP server (GA in AAP 2.6, June 2026 update). The CRD
+# ansiblemcpservers.mcpserver.ansible.com is shipped by the AAP 2.6 operator; verify the
+# fields with `oc explain ansiblemcpserver.spec` and the AAP docs before applying.
+# The server forwards each request to AAP with the CALLER's token, so the agent can only
+# do what the AAP user "openclaw-agent" is allowed to do (execute the catalog workflows).
+apiVersion: mcpserver.ansible.com/v1alpha1
+kind: AnsibleMCPServer
+metadata:
+  name: aap-mcp
+  namespace: aap
+spec:
+  aap_url: https://aap.aap.svc     # VERIFY: internal Platform Gateway service
+  allow_write_operations: true     # VERIFY: needed to launch jobs; RBAC in AAP limits scope

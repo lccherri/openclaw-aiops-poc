@@ -1,0 +1,83 @@
+# Test case 1/2 - "checkout" app. Revision 1 reads checkout-config-v1 (valid).
+# scripts/cases/case1-break.sh switches it to checkout-config-v2 (invalid JSON) ->
+# CrashLoopBackOff. A rollback to the previous revision fixes it.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: checkout-app
+  namespace: demo-apps
+data:
+  app.py: |
+    import json, sys, http.server, socketserver
+    CONFIG = "/config/app.json"
+    print("checkout: starting, loading configuration from", CONFIG, flush=True)
+    try:
+        with open(CONFIG) as f:
+            cfg = json.load(f)
+        port = int(cfg["port"])
+        db_url = cfg["database"]["url"]
+    except (json.JSONDecodeError, KeyError, ValueError) as e:
+        print(f"FATAL checkout: invalid configuration in {CONFIG}: {type(e).__name__}: {e}", flush=True)
+        sys.exit(1)
+    print(f"checkout: config OK (port={port}, database={db_url})", flush=True)
+    class H(http.server.SimpleHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200); self.end_headers(); self.wfile.write(b"checkout OK\n")
+    socketserver.TCPServer(("", port), H).serve_forever()
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: checkout-config-v1
+  namespace: demo-apps
+data:
+  app.json: |
+    { "port": 8080, "database": { "url": "postgresql://orders-db.demo-apps.svc:5432/orders" } }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: checkout-config-v2
+  namespace: demo-apps
+data:
+  # Broken on purpose: trailing comma + port as a word
+  app.json: |
+    { "port": "eighty-eighty", "database": { "url": "postgresql://orders-db.demo-apps.svc:5432/orders", } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: checkout
+  namespace: demo-apps
+  labels:
+    app: checkout
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app: checkout
+  template:
+    metadata:
+      labels:
+        app: checkout
+    spec:
+      containers:
+        - name: checkout
+          image: registry.access.redhat.com/ubi9/python-311:latest
+          command: ["python", "/app/app.py"]
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet: { path: /, port: 8080 }
+          resources:
+            requests: { cpu: 20m, memory: 64Mi }
+            limits: { cpu: 200m, memory: 128Mi }
+          volumeMounts:
+            - { name: app, mountPath: /app }
+            - { name: config, mountPath: /config }
+      volumes:
+        - name: app
+          configMap: { name: checkout-app }
+        - name: config
+          configMap: { name: checkout-config-v1 }

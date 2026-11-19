@@ -1,0 +1,63 @@
+# Prometheus MCP server (pab1it0/prometheus-mcp-server). Alternative to evaluate:
+# rhobs/obs-mcp (Red Hat observability MCP server) - see docs/open-points.md.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus-mcp
+  namespace: aiops-tools
+  labels:
+    app.kubernetes.io/name: prometheus-mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus-mcp
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: prometheus-mcp
+    spec:
+      serviceAccountName: prometheus-mcp
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: mcp
+          image: prometheus-mcp-server
+          env:
+            - { name: PROMETHEUS_URL, value: "https://thanos-querier.openshift-monitoring.svc:9091" }
+            - name: PROMETHEUS_TOKEN
+              valueFrom:
+                secretKeyRef: { name: prometheus-mcp-token, key: token }
+            - { name: PROMETHEUS_MCP_SERVER_TRANSPORT, value: http }
+            - { name: PROMETHEUS_MCP_BIND_HOST, value: "0.0.0.0" }
+            - { name: PROMETHEUS_MCP_BIND_PORT, value: "8080" }
+            - { name: REQUESTS_CA_BUNDLE, value: /etc/service-ca/service-ca.crt }
+            - { name: SSL_CERT_FILE, value: /etc/service-ca/service-ca.crt }
+          ports:
+            - { name: http, containerPort: 8080 }
+          readinessProbe:
+            tcpSocket: { port: http }
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - { name: service-ca, mountPath: /etc/service-ca, readOnly: true }
+      volumes:
+        - name: service-ca
+          configMap: { name: service-ca }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus-mcp
+  namespace: aiops-tools
+spec:
+  selector:
+    app.kubernetes.io/name: prometheus-mcp
+  ports:
+    - { name: http, port: 8080, targetPort: http }

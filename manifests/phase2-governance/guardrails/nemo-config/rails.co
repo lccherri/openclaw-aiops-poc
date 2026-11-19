@@ -1,0 +1,25 @@
+# Colang 1.0 flows used by config.yaml
+
+define bot refuse sensitive data
+  "Blocked by guardrails: the content contains credentials or personal data."
+
+define bot refuse prompt injection
+  "Blocked by guardrails: the content contains instructions that try to override the operating rules."
+
+define flow check sensitive data input
+  $found = execute detect_sensitive_data(text=$user_message)
+  if $found
+    bot refuse sensitive data
+    stop
+
+define flow check sensitive data output
+  $found = execute detect_sensitive_data(text=$bot_message)
+  if $found
+    bot refuse sensitive data
+    stop
+
+define flow check prompt injection input
+  $found = execute detect_prompt_injection(text=$user_message)
+  if $found
+    bot refuse prompt injection
+    stop

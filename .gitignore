@@ -1,0 +1,33 @@
+# Internal working notes (not published)
+context/
+
+# Local secrets and environment-specific values
+.env
+*.env
+!*.env.example
+kubeconfig*
+*.token
+
+# Evidence collected during test runs (may contain cluster hostnames / tokens)
+evidence/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Ansible
+*.retry
+.ansible/
+collections/ansible_collections/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Rendered manifests (contain environment-specific values)
+manifests/**/rendered/
+manifests/phase3-agent/openclaw/agent.env

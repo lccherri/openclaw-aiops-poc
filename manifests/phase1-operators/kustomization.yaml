@@ -1,0 +1,9 @@
+# cert-manager is NOT included: it is already installed in the target cluster
+# (namespace cert-manager-operator, channel stable-v1). Verify with `make preflight`.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - rhcl/subscription.yaml
+  - rhoai/subscription.yaml
+  - aap/subscription.yaml
+  - external-secrets/subscription.yaml
