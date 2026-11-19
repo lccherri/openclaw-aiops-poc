@@ -48,6 +48,16 @@ for name, url in [("kubernetes MCP", "http://kubernetes-mcp.aiops-tools.svc:8080
         print("        tools:", ", ".join(sorted(tools)))
     except Exception as e:
         check(name, True, False, str(e)[:80])
+# Launch layer: the only tools that can START a change, and only through AAP approval nodes
+try:
+    tools = mcp_tools("http://aap-actions.aiops-tools.svc:8080/mcp")
+    check("aap-actions (launch layer -> AAP approvals)", True, True,
+          f"tools={len(tools)} expected=['collect_diagnostics', 'launch_remediation']")
+    print("        tools:", ", ".join(sorted(tools)))
+    if sorted(tools) != ["collect_diagnostics", "launch_remediation"]:
+        results.append("FAIL"); print("[FAIL] aap-actions exposes unexpected tools")
+except Exception as e:
+    check("aap-actions (launch layer -> AAP approvals)", True, False, str(e)[:80])
 check("MaaS gateway (model path, agent key)", True,
       tcp("maas-default-gateway-data-science-gateway-class.openshift-ingress.svc.cluster.local", 443))
 check("MLflow (traces)", True, tcp("mlflow.redhat-ods-applications.svc.cluster.local", 8443))

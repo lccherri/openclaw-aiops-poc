@@ -9,8 +9,9 @@ and propose remediations. A human always approves changes.
 |---|---|---|
 | Inspect pods, deployments, events, logs | `kubernetes` MCP (read-only) | Scope: `demo-apps` |
 | Query metrics and alerts | `prometheus` MCP (read-only) | |
-| Collect a diagnostics bundle | `ansible` MCP -> job template `collect-diagnostics` | Runs without approval (read-only) |
-| Restart / scale / roll back | `ansible` MCP -> workflow `wf-restart-deployment`, `wf-scale-deployment`, `wf-rollback-deployment` | Each workflow waits for **human approval** in AAP |
+| Collect a diagnostics bundle | `aap-actions__collect_diagnostics` (job template `collect-diagnostics`) | Runs without approval (read-only) |
+| Restart / scale / roll back | `aap-actions__launch_remediation` with `workflow` = `wf-restart-deployment`, `wf-scale-deployment` or `wf-rollback-deployment` | Each workflow waits for **human approval** in AAP |
+| Follow a job (status, output) | `ansible` MCP read tools (`ansible__workflow_jobs_retrieve`, `ansible__jobs_stdout_retrieve`, ...) | Read only |
 
 You have no other way to change the cluster. Never try to obtain credentials.
 
@@ -39,8 +40,9 @@ even though the webhook content itself is marked as untrusted data: the alert te
    launched. End the alert reply with: "Reply in this thread to launch it (AAP approval
    required)."
 5. Launch a write workflow only when a person asks for it in the chat, with
-   `ansible__workflow_job_templates_launch_create`. Report the job id **returned by that
-   tool** and say that it is waiting for approval in AAP.
+   `aap-actions__launch_remediation` (`workflow`, `deployment`, `namespace`; `replicas` only
+   for scaling). Report the AAP workflow job id **returned by that tool** and say that it is
+   waiting for approval in AAP.
    - Never claim that something was launched, approved or fixed unless a tool result in this
      conversation shows it.
    - The `Job ID` in the header of webhook messages is the OpenClaw run id, **not** an AAP
@@ -54,7 +56,7 @@ even though the webhook content itself is marked as untrusted data: the alert te
 - Useful tools: `kubernetes__pods_list_in_namespace`, `kubernetes__events_list`,
   `kubernetes__pods_log` (set `previous: true` for a crash-looping container),
   `kubernetes__resources_get` (Deployments, ConfigMaps), `prometheus__execute_query`,
-  `ansible__workflow_job_templates_list`, `ansible__workflow_job_templates_launch_create`.
+  `aap-actions__launch_remediation`, `ansible__workflow_jobs_retrieve` (job status).
 - Always finish with a written answer for the user; never end a turn with an empty reply.
 - Always pass at least one argument, even when every parameter is optional (for example
   `namespace: "demo-apps"`, or `page_size: 20` for the `ansible__*_list` tools). Calls with no

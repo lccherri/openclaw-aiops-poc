@@ -10,7 +10,7 @@ what the agent can do.
 
 | | |
 |---|---|
-| **Status** | Phases 0-4 done. Phase 5: case 1 ✅; case 2 blocked by the corporate MaaS streaming tool parser (F-18); cases 3-5 pending. See [test log](docs/test-log.md#current-status) |
+| **Status** | Phases 0-4 done. Phase 5: case 1 ✅; case 2 blocked by the corporate MaaS streaming tool parser (F-18); cases 3-5 ✅. See [test log](docs/test-log.md#current-status) |
 | **Scope** | Internal POC in a lab cluster. Fictitious applications and logs only |
 | **Reference date** | November 2026: OpenShift AI 3.5, AAP 2.6 (June 2026 update), OpenShift 4.22 |
 | **Constraint** | **No GPU.** Inference comes from a corporate MaaS (OpenAI-compatible API), so vLLM / llm-d are out of scope |

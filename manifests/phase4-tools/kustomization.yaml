@@ -9,7 +9,13 @@ resources:
   - mcp-prometheus/rbac.yaml
   - mcp-prometheus/deployment.yaml
   - aap-access/rbac.yaml
+  - aap-actions/deployment.yaml          # intent-level launch tools in front of AAP (test-log F-18)
   # ansible-mcp/ansiblemcpserver.yaml is applied separately after schema validation
+configMapGenerator:
+  - name: aap-actions-code
+    namespace: aiops-tools
+    files:
+      - aap-actions/server.py
 images:
   - name: kubernetes-mcp-server
     newName: quay.io/containers/kubernetes_mcp_server
@@ -17,3 +23,6 @@ images:
   - name: prometheus-mcp-server
     newName: ghcr.io/pab1it0/prometheus-mcp-server
     digest: sha256:49196d4099e8c2f64d05d7f6ee0f3a5fa8d89e3dc304b6ff96146e05afd984c1   # v1.6.2
+  - name: ubi9-python-311
+    newName: registry.access.redhat.com/ubi9/python-311
+    digest: sha256:7b6cb58d3ff034df7b300800bd89a469d9bd2f739d43250d76b9c9e805307ab5   # "latest" on 2026-11-19

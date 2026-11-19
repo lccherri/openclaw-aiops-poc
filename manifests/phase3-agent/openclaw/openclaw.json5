@@ -93,9 +93,10 @@
         "requestTimeoutMs": 30000,
         "toolFilter": { "include": ["execute_query", "execute_range_query"] }
       },
-      // Ansible MCP server (AAP 2.6). Calls run with the AAP user "openclaw-agent" token, which
-      // may only launch the approval workflows and collect-diagnostics. toolFilter keeps the
-      // prompt small and drops every tool the procedure does not need (AGENTS.md).
+      // Ansible MCP server (AAP 2.6): READ tools only (catalog, job status, job output). Calls
+      // run with the AAP user "openclaw-agent" token. The product's launch tools take a nested
+      // requestBody that the streaming model gateway truncates (test-log F-18): launches go
+      // through aap-actions below.
       "ansible": {
         "transport": "streamable-http",
         "url": "http://aap-mcp.aap.svc:8086/job_management/mcp",
@@ -104,11 +105,20 @@
         "toolFilter": {
           "include": [
             "workflow_job_templates_list", "workflow_job_templates_retrieve",
-            "workflow_job_templates_launch_create", "workflow_jobs_list", "workflow_jobs_retrieve",
-            "workflow_jobs_workflow_nodes_list", "job_templates_list", "job_templates_launch_create",
-            "jobs_list", "jobs_retrieve", "jobs_stdout_retrieve"
+            "workflow_jobs_list", "workflow_jobs_retrieve", "workflow_jobs_workflow_nodes_list",
+            "job_templates_list", "jobs_list", "jobs_retrieve", "jobs_stdout_retrieve"
           ]
         }
+      },
+      // Launch layer (phase4-tools/aap-actions): intent-level tools with flat arguments,
+      // launch_remediation(workflow, deployment, namespace) and collect_diagnostics(app,
+      // namespace). Same AAP identity (the token is forwarded, the server stores none), so AAP
+      // RBAC, surveys and approval nodes stay the control.
+      "aap-actions": {
+        "transport": "streamable-http",
+        "url": "http://aap-actions.aiops-tools.svc:8080/mcp",
+        "headers": { "Authorization": "Bearer ${AAP_MCP_TOKEN}" },
+        "requestTimeoutMs": 60000
       }
     }
   },

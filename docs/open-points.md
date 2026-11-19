@@ -20,7 +20,7 @@ cluster.
 | # | Question | Status | Notes |
 |---|---|---|---|
 | 7 | Does NeMo Guardrails pass OpenAI `tools` / `tool_calls` through? | ✅ Only with `passthrough: true`, non-streaming (15/15) | F-06, F-09 |
-| 8 | Do NeMo input rails see tool outputs (logs) or only the user message? | 🟡 Open | Input rails check the last user message by default; log content arrives as `tool` messages. Only measurable by sending the log text to Guardrails directly, since Guardrails is not in the agent path (case 4, item 4.4) |
+| 8 | Do NeMo input rails see tool outputs (logs) or only the user message? | ✅ Answered: **only the user message** | Case 4 (Run 4): the injected log text is blocked as a user message and passes as a tool result. Guardrails in the agent path would not catch log-borne injections without output/tool rails |
 | 9 | OpenClaw MCP configuration key | ✅ Answered | `mcp.servers` (streamable-http, `headers`, `toolFilter.include`) accepted by OpenClaw 2026.9.8 (`config validate`, `mcp doctor`) |
 | 10 | OpenClaw OTel export to MLflow | ✅ Answered | Starter kit OTel sidecar (projected SA token + `mlflow-operator-mlflow-integration`, workspace header); traces arriving |
 | 11 | Ansible MCP server: CR fields, Service name, pod labels | ✅ Answered | `AnsibleMCPServer aap-mcp`: Service `aap-mcp:8086`, toolset path `/job_management/mcp`, pod label `app.kubernetes.io/component=ansible-mcp-server` |

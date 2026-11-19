@@ -1,0 +1,95 @@
+# aap-actions: intent-level launch tools in front of the AAP catalog (see server.py).
+# Holds no credential: it forwards the agent's AAP token, so AAP RBAC, surveys and approval
+# nodes stay the control. Code is the ConfigMap generated from server.py (kustomization.yaml).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aap-actions
+  namespace: aiops-tools
+  labels:
+    app.kubernetes.io/name: aap-actions
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: aap-actions
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: aap-actions
+    spec:
+      automountServiceAccountToken: false       # no Kubernetes access at all
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: mcp
+          image: ubi9-python-311
+          command: ["python3", "/app/server.py"]
+          env:
+            - { name: AAP_URL, value: "http://aap.aap.svc.cluster.local" }
+            - { name: ALLOWED_NAMESPACES, value: "demo-apps" }
+            - { name: PYTHONDONTWRITEBYTECODE, value: "1" }
+          ports:
+            - { name: http, containerPort: 8080 }
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 30
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { cpu: 200m, memory: 128Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - { name: code, mountPath: /app, readOnly: true }
+      volumes:
+        - name: code
+          configMap: { name: aap-actions-code }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aap-actions
+  namespace: aiops-tools
+spec:
+  selector:
+    app.kubernetes.io/name: aap-actions
+  ports:
+    - { name: http, port: 8080, targetPort: http }
+---
+# Egress of the launch layer: DNS and the AAP gateway only. Ingress comes only from the agent
+# namespace (allow-from-openclaw-only in ../networkpolicies.yaml).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: aap-actions-egress
+  namespace: aiops-tools
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: aap-actions
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: openshift-dns
+      ports:
+        - { protocol: UDP, port: 5353 }
+        - { protocol: TCP, port: 5353 }
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: aap
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/component: aap-gateway
+      ports:
+        - { protocol: TCP, port: 8000 }
