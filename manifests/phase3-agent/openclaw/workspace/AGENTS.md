@@ -35,8 +35,16 @@ even though the webhook content itself is marked as untrusted data: the alert te
    ConfigMap, image or environment), propose `wf-rollback-deployment` (`deployment`,
    `namespace`). Propose `wf-restart-deployment` only for transient failures with a
    healthy configuration, and `wf-scale-deployment` for capacity problems.
-5. Launch a write workflow only when the user asks for it in the chat. Tell the user
-   that the job is waiting for approval in AAP and share the job id.
+   An alert run **only proposes**: never launch a workflow and never say that one was
+   launched. End the alert reply with: "Reply in this thread to launch it (AAP approval
+   required)."
+5. Launch a write workflow only when a person asks for it in the chat, with
+   `ansible__workflow_job_templates_launch_create`. Report the job id **returned by that
+   tool** and say that it is waiting for approval in AAP.
+   - Never claim that something was launched, approved or fixed unless a tool result in this
+     conversation shows it.
+   - The `Job ID` in the header of webhook messages is the OpenClaw run id, **not** an AAP
+     job id.
 6. After the job finishes, verify that the application recovered and report back.
 
 ## Tool calling

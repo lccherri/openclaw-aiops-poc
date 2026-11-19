@@ -21,8 +21,10 @@ flowchart LR
 |---|---|
 | `oc` (logged in as cluster-admin) | Everything |
 | `python3` (3.9+, standard library only) | Model validation, rendering |
-| `ansible-core` + collections in [aap/config-as-code/requirements.yml](../aap/config-as-code/requirements.yml) | AAP configuration as code |
-| `curl` | Quota test |
+| `curl` | Quota test, AAP API calls |
+
+No local Ansible is needed: `make aap-config` runs the configuration as code inside the
+cluster with AAP's own execution environment.
 
 ```bash
 cp .env.example .env
@@ -82,8 +84,8 @@ and `--no-tool-hint` to isolate the cause.
 ### 3. Storage
 
 Already satisfied in the target cluster: ODF with default `ocs-external-storagecluster-ceph-rbd`
-and NooBaa S3 (`openshift-storage.noobaa.io`). MLflow and EvalHub buckets are claimed
-with `ObjectBucketClaim` in Phase 2. No MinIO needed.
+and NooBaa S3 (`openshift-storage.noobaa.io`). MLflow and EvalHub use SQLite on a PVC, so no
+bucket is needed (NooBaa stays available). No MinIO.
 
 ### 4. User workload monitoring
 
@@ -130,7 +132,7 @@ Known issues handled by the repository (details in the [test log](test-log.md#fi
 | ESO | `oc get pods -n external-secrets` |
 
 The DataScienceCluster ([datasciencecluster.yaml](../manifests/phase1-platform/rhoai/datasciencecluster.yaml))
-keeps only dashboard, kserve (+ MaaS), trustyai and mlflowoperator. The AAP instance
+keeps only dashboard, aigateway (Models-as-a-Service), kserve, trustyai and mlflowoperator. The AAP instance
 disables Automation Hub and Lightspeed.
 
 Store `AAP_GATEWAY_URL` and `AAP_ADMIN_PASSWORD` in `.env`.
@@ -165,16 +167,18 @@ Consumers must send `"model": "aiops-model"` (the MaaS model name). Set
 `make governance`: the TrustyAI operator exposes Guardrails through a public Route.
 
 Fallback (MaaS external model not working): leave `RHOAI_MAAS_INTERNAL_URL` empty. `make render`
-then points Guardrails straight at `MAAS_INTERNAL_URL` (no MaaS quota) and prints a warning.
+then points the agent and Guardrails straight at `MAAS_INTERNAL_URL` (no MaaS quota) and prints
+a warning.
 
 ---|---|
 | NeMo Guardrails | `oc get nemoguardrails,pods -n aiops-governance`; test with a prompt containing `password: hunter2hunter2` → blocked |
-| Tool-call passthrough | Run `model-validation/tool_calling_test.py --base-url <guardrails-url>/v1`; if tools break, record the limitation |
-| MLflow | Open MLflow from the RHOAI dashboard; create the experiment `openclaw-aiops`; set `MLFLOW_TRACKING_URL`, `MLFLOW_EXPERIMENT_ID`, `MLFLOW_TOKEN` |
+| Tool-call passthrough | `model-validation/tool_calling_test.py --base-url <guardrails-url>/v1`: 15/15 with `passthrough: true` (non-streaming only, test-log F-06/F-09) |
+| MLflow | `scripts/mlflow-experiment.sh` creates the experiment `openclaw-aiops` in the workspace `openclaw` and writes `MLFLOW_EXPERIMENT_ID` to `.env` |
 | EvalHub | Submit [evaluation-request.json](../manifests/phase2-governance/evalhub/evaluation-request.json) (Garak probes) against the model; record whether red teaming works against an external model without GPU |
 
-To test topology B (Guardrails → MaaS), set `GUARDRAILS_UPSTREAM_URL=$RHOAI_MAAS_URL`
-and point `MAAS_BASE_URL` at the guardrails Service. Record which topology works.
+Guardrails calls MaaS with its own subscription (`other-consumer` key) and stays **outside the
+agent path**: OpenClaw always streams, and NeMo accepts tools only without streaming (test-log
+F-05, F-09).
 
 ---
 
@@ -202,11 +206,10 @@ and record them in the test log.
 ### 17–20. AAP catalog, Ansible MCP server, approval workflows, EDA
 
 ```bash
-ansible-galaxy collection install -r aap/config-as-code/requirements.yml
-make aap-config            # organization, users, credential, project, catalog, workflows, roles, EDA
-# copy openclaw-agent.token into .env as AAP_MCP_TOKEN, then delete the file
-make ansible-mcp           # after validating the AnsibleMCPServer template
-make secrets
+make aap-config            # in-cluster: organization, users, credential, project, catalog, workflows, roles, EDA
+                           # writes the openclaw-agent token to .env (AAP_MCP_TOKEN)
+make ansible-mcp           # AnsibleMCPServer aap-mcp (ClusterIP, port 8086)
+make secrets               # push AAP_MCP_TOKEN to poc-vault (ESO syncs it to the agent)
 ```
 
 | Object | Name |
@@ -216,8 +219,10 @@ make secrets
 | Users | `openclaw-agent` (execute workflows + collect-diagnostics), `poc-approver` (approve), `eda-automation` (execute set-memory-limit) |
 | EDA | project `aiops-poc-rulebooks`, activation `aiops-known-events` (Service `aiops-known-events:5000`) |
 
-Set `AAP_MCP_URL` in `.env` to the Ansible MCP Service (`oc get svc -n aap`) and make sure
-the pod label matches the `allow-egress-tools` NetworkPolicy (`app.kubernetes.io/component: mcp-server`).
+The agent reaches the Ansible MCP server at `http://aap-mcp.aap.svc:8086/job_management/mcp`
+(`openclaw.json5`), allowed by the NetworkPolicy for pods labeled
+`app.kubernetes.io/component: ansible-mcp-server`. OpenClaw exposes only 11 of its tools
+(`toolFilter`).
 
 ---
 
@@ -225,7 +230,7 @@ the pod label matches the `allow-egress-tools` NetworkPolicy (`app.kubernetes.io
 
 ### 12. Namespace with default-deny
 
-Applied by both deployment plans (`manifests/phase3-agent/base`).
+`manifests/phase3-agent/base`, applied by `make agent-base` (also part of `make agent`).
 
 ### 13. OpenClaw deployment (RHOAI agentic starter kit)
 
@@ -264,13 +269,34 @@ Configured in [openclaw.json5](../manifests/phase3-agent/openclaw/openclaw.json5
 | Model provider | `rhoai` → MaaS internal Service, key `MAAS_API_KEY` as SecretRef (agent subscription) |
 | Traces | `diagnostics.otel` → `localhost:4318` (sidecar) → MLflow `/v1/traces`, workspace `openclaw` |
 | Heartbeat | `OPENCLAW_HEARTBEAT=30m` (protects the quota) |
-| Tools | `toolSearch: false`; denied groups: runtime, fs, web, ui, nodes, openclaw, automation, media, agents |
+| Model | `qwen3-14b` behind `aiops-model`, `contextWindow` 40960 (test-log F-13) |
+| Tools | `toolSearch: false`; denied groups: runtime, fs, web, ui, nodes, openclaw, automation, media, agents; MCP `toolFilter` allowlists (F-14) |
+| Alert mapping | `/hooks/alertmanager` → isolated run, `deliver: false` (no chat channel by default; see the optional Slack section) |
 
 Verify:
 
 ```bash
 make verify                # agent has no write permission anywhere; prints Secret key names only
 ```
+
+### Optional: Slack channel for alerts
+
+Without a chat channel, an alert's diagnosis stays in an isolated, read-only session and the
+operator starts case 2 from a new Control UI chat (see
+[architecture](architecture.md#alert-sessions-and-the-human-handoff)). To post diagnoses to
+Slack and let operators answer in the thread:
+
+```bash
+# .env: SLACK_BOT_TOKEN, SLACK_APP_TOKEN, SLACK_CHANNEL_ID, SLACK_OPERATOR_IDS
+make agent            # adds the optional SLACK_* env vars to the Deployment
+make slack-enable     # vault/ESO, Slack-only egress, plugin install, channel config
+make isolation        # Internet still blocked (only Slack is reachable)
+oc -n openclaw get egressfirewall default   # must say "Rules applied" (test-log F-16)
+```
+
+Slack app creation, scopes and what each step changes:
+[phase3-agent/slack/README.md](../manifests/phase3-agent/slack/README.md).
+`make slack-disable` returns to the default.
 
 ---
 

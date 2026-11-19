@@ -10,7 +10,7 @@ what the agent can do.
 
 | | |
 |---|---|
-| **Status** | Phases 0-4 done; phase 5 (tests) started, see [test log](docs/test-log.md) |
+| **Status** | Phases 0-4 done. Phase 5: case 1 ✅; case 2 blocked by the internal MaaS streaming tool parser (F-18); cases 3-5 pending. See [test log](docs/test-log.md#current-status) |
 | **Scope** | Internal POC in a lab cluster. Fictitious applications and logs only |
 | **Reference date** | November 2026: OpenShift AI 3.5, AAP 2.6 (June 2026 update), OpenShift 4.22 |
 | **Constraint** | **No GPU.** Inference comes from an internal Red Hat MaaS (OpenAI-compatible API), so vLLM / llm-d are out of scope |
@@ -38,7 +38,7 @@ what the agent can do.
 | 02 | Identity | Credentials in a restricted "vault" namespace, synced by **External Secrets Operator**; agent has no Kubernetes token | GA | Yes |
 | 03 | Tools | **Read-only MCP servers** (Kubernetes, Prometheus) with read-only RBAC on `demo-apps` | GA | Yes (phase 1) |
 | 03 | Tools | MCP Gateway (identity-based authorization) | Technology Preview | Phase 2 |
-| 04 | Content | **NeMo Guardrails** in front of the model (credentials, personal data, prompt injection) | GA (3.4) | Yes |
+| 04 | Content | **NeMo Guardrails** (credentials, personal data, prompt injection) | GA (3.4) | Yes, **standalone**: cannot sit in the agent path (OpenClaw streams, F-09) |
 | 05 | Traceability | **MLflow tracing** (OpenTelemetry from OpenClaw) | GA (3.4) | Yes |
 | 05 | Traceability | **EvalHub** + automated red teaming (Garak) | GA (3.5) | Yes (model evaluation) |
 | 06 | Action | **AAP** job template catalog + **approval workflows** | GA | Yes |
@@ -53,7 +53,7 @@ what the agent can do.
 
 ```mermaid
 flowchart LR
-    U["User<br/>OpenClaw Control UI<br/>(or test Slack)"]
+    U["User<br/>OpenClaw Control UI<br/>(Slack: optional)"]
 
     subgraph OCP["OpenShift cluster"]
         subgraph AG["ns: openclaw · default-deny · no SA token"]
@@ -116,6 +116,9 @@ Key design decisions:
   could not be placed in the agent path in this release (OpenClaw always streams; NeMo accepts
   tools only without streaming), so it runs standalone, as the plan's risk table foresees. See
   [docs/architecture.md](docs/architecture.md#model-path-maas-and-guardrails-order).
+- **Alerts run as isolated, one-shot agent runs.** The diagnosis is read in the Control UI, or
+  in a Slack channel where operators answer in the thread (optional, prepared and tested;
+  [architecture](docs/architecture.md#alert-sessions-and-the-human-handoff)).
 - **OpenClaw is deployed with the RHOAI agentic starter kit** (kustomize remote base pinned to
   a commit) plus a POC overlay: ESO-managed Secret, POC config, agent rules, MLflow tracing
   sidecar (the only container with a ServiceAccount token).
@@ -158,6 +161,7 @@ sequenceDiagram
 ├── docs/
 │   ├── architecture.md           # components, network, identities, flows
 │   ├── installation.md           # step-by-step runbook (phases 0-4)
+│   ├── access.md                 # observation tools: what a human checks, per test case
 │   ├── test-plan.md              # test cases, expected results, evidence to collect
 │   ├── test-log.md               # test notebook: results of the executed tests
 │   └── open-points.md            # open questions, decisions, verification log
@@ -167,7 +171,7 @@ sequenceDiagram
 │   ├── phase1-operators/         # Subscriptions: RHCL, RHOAI 3.5, AAP 2.6, ESO
 │   ├── phase1-platform/          # Kuadrant, DataScienceCluster, AAP instance, ESO operand
 │   ├── phase2-governance/        # MaaS, NeMo Guardrails, MLflow, EvalHub
-│   ├── phase3-agent/             # namespace, NetworkPolicies, ExternalSecret, starter-kit overlay
+│   ├── phase3-agent/             # namespace, NetworkPolicies, ExternalSecret, starter-kit overlay, optional Slack channel
 │   ├── phase4-tools/             # MCP servers (read-only), AAP SA, Ansible MCP server
 │   └── demo-apps/                # test apps (cases 1-4), PrometheusRules, Alertmanager routing
 ├── aap/
@@ -184,8 +188,8 @@ sequenceDiagram
 
 ## Quick start
 
-Prerequisites: `oc` logged in as cluster-admin, `python3`, `ansible-playbook` (for AAP
-configuration), and access to the internal MaaS.
+Prerequisites: `oc` logged in as cluster-admin, `python3`, `curl`, and access to the internal
+MaaS. AAP is configured from inside the cluster (no local Ansible).
 
 ```bash
 cp .env.example .env              # fill in MaaS URL/key, tokens, passwords
@@ -233,8 +237,9 @@ Full runbook: [docs/installation.md](docs/installation.md). Test cases:
 | Risk | Fallback |
 |---|---|
 | Cluster has no route to the internal MaaS | Fix networking before any installation; the POC cannot proceed without it |
-| MaaS model weak at tool calling | Switch models after the pre-validation (`make model-validate`) |
-| OpenClaw starter kit (Developer Preview) does not work | Not needed: the starter kit deployed successfully (plain Deployment + POC NetworkPolicies) |
+| MaaS model weak at tool calling | **Happened**: `llama-scout-17b` → `qwen3-14b` (F-01, F-12, F-13) |
+| Internal MaaS streaming tool-call parser mangles arguments | **Open** (F-14, F-18): read tools work (allowlist mitigation); AAP launch tools fail, so the agent cannot launch workflows. Report to the MaaS owners, or put a flat-argument launch tool in front of AAP |
+| OpenClaw starter kit (Developer Preview) does not work | Did not happen: the starter kit deployed successfully with the POC overlay |
 | MaaS with an external model (Technology Preview) does not work | OpenClaw calls the internal MaaS directly; quota shown only with the internal MaaS key limits |
 | Guardrails does not support the external model / tool calls | **Happened** (OpenClaw streams; F-09): Guardrails runs standalone in phase 1 |
 | Internal MaaS quota exhausted | Long heartbeat (30 min); concentrate tests in short windows |

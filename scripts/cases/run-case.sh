@@ -31,10 +31,17 @@ case "${case_id}:${action}" in
     oc -n ${NS} scale deployment/inventory-sync --replicas=0 >/dev/null
     mark "RESET inventory-sync scaled to 0" ;;
   5:trigger)
-    mark "TRIGGER quota burst"
+    # The agent subscription is sized for normal operation (2M tokens/h, test-log F-10):
+    # lower it temporarily so the burst reaches the limit in a few requests.
+    limit="${CASE5_TOKEN_LIMIT:-3000}"
+    oc -n models-as-a-service patch maassubscription openclaw-agent --type=json \
+      -p "[{\"op\":\"replace\",\"path\":\"/spec/modelRefs/0/tokenRateLimits/0/limit\",\"value\":${limit}}]" >/dev/null
+    mark "TRIGGER quota burst (openclaw-agent limit lowered to ${limit} tokens/h)"
+    sleep 20   # let MaaS reconcile the new limit
     "${REPO_ROOT}/scripts/quota-burst.sh" | tee -a "${LOG_DIR}/case5-quota.log" ;;
   5:reset)
-    mark "RESET nothing to do (quota window expires by itself)" ;;
+    oc apply -f "${REPO_ROOT}/manifests/phase2-governance/maas/access.yaml" >/dev/null
+    mark "RESET openclaw-agent subscription restored from access.yaml (tokens already used stay counted until the window expires)" ;;
   *:status)
     oc -n ${NS} get pods -o wide
     oc -n ${NS} get events --sort-by=.lastTimestamp | tail -15 ;;

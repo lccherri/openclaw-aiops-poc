@@ -1,5 +1,6 @@
 # NeMo Guardrails configuration (content control layer 04).
-# Topology B: OpenClaw -> Guardrails -> RHOAI MaaS (agent subscription, token quota) -> model.
+# Standalone MaaS consumer (own subscription): OpenClaw always streams and NeMo accepts tools
+# only without streaming, so Guardrails is not in the agent path (docs/test-log.md F-09).
 # Base URL / model are rendered by scripts/render-config.sh from .env (never committed):
 #   GUARDRAILS_UPSTREAM_URL  default: RHOAI_MAAS_INTERNAL_URL (in-cluster MaaS gateway)
 #   GUARDRAILS_MODEL         default: aiops-model (MaaS model name)

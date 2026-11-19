@@ -1,0 +1,22 @@
+# Optional Slack channel (see README.md). Control layer 01 stays in place: the only external
+# destinations the agent namespace may reach are Slack's API and Socket Mode endpoints.
+# EgressFirewall filters traffic leaving the cluster; in-cluster destinations stay governed by
+# the NetworkPolicies (networkpolicy-egress-external.yaml.tmpl excludes every internal range).
+# One EgressFirewall per namespace, and it must be named "default".
+apiVersion: k8s.ovn.org/v1
+kind: EgressFirewall
+metadata:
+  name: default
+  namespace: openclaw
+spec:
+  egress:
+    - type: Allow
+      to: { dnsName: slack.com }          # Web API (apps.connections.open, chat.postMessage, ...)
+    # Explicit names: wildcard dnsName ("*.slack.com") needs the DNSNameResolver feature, which
+    # is not enabled on this cluster; OVN then rejects the WHOLE EgressFirewall (test-log F-16).
+    - type: Allow
+      to: { dnsName: wss-primary.slack.com }  # Socket Mode WebSocket
+    - type: Allow
+      to: { dnsName: wss-backup.slack.com }   # Socket Mode WebSocket (fallback)
+    - type: Deny
+      to: { cidrSelector: 0.0.0.0/0 }

@@ -23,8 +23,13 @@ apply_secret poc-vault openclaw-agent-credentials \
   "AGENT_MAAS_KEY=${AGENT_MAAS_KEY:-unset}" \
   "OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:?set OPENCLAW_GATEWAY_TOKEN in .env}" \
   "OPENCLAW_HOOKS_TOKEN=${OPENCLAW_HOOKS_TOKEN:?set OPENCLAW_HOOKS_TOKEN in .env}" \
-  "AAP_MCP_TOKEN=${AAP_MCP_TOKEN:-unset}" \
-  "MLFLOW_TOKEN=${MLFLOW_TOKEN:-unset}"
+  "AAP_MCP_TOKEN=${AAP_MCP_TOKEN:-unset}"
+
+# Optional Slack channel (scripts/slack.sh): only when the tokens are set
+if [[ -n "${SLACK_BOT_TOKEN:-}" && -n "${SLACK_APP_TOKEN:-}" ]]; then
+  apply_secret poc-vault openclaw-slack-credentials \
+    "SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}" "SLACK_APP_TOKEN=${SLACK_APP_TOKEN}"
+fi
 
 # 2. Upstream model credential (used by MaaS / guardrails / EvalHub only)
 for ns in aiops-models aiops-governance; do

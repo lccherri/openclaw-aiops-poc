@@ -62,7 +62,7 @@
   // Control layers 01/03: no shell, no filesystem, no web/browser, no node control, no
   // gateway administration (group:openclaw), no cron/automation, no sub-agents.
   // The agent acts on the cluster only through the MCP servers below.
-  // toolSearch=false: expose tool schemas directly; llama-scout-17b failed the meta-tool
+  // toolSearch=false: expose tool schemas directly; llama-scout-17b (first model) failed the meta-tool
   // indirection (tool_search/tool_describe/tool_calls) but calls direct tools reliably (F-11).
   "tools": {
     "toolSearch": false,

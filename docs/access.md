@@ -13,6 +13,7 @@ your local `.env` (never committed).
 | Tool | What it shows | Case 1 | Case 2 | Case 3 | Case 4 | Case 5 |
 |---|---|:-:|:-:|:-:|:-:|:-:|
 | [OpenClaw Control UI](#openclaw-control-ui) | What the agent read, concluded and said | ● | ● | (absence) | ● | ● |
+| [Slack channel](#slack-channel-optional) (optional) | Alert diagnoses and the operator's conversation with the agent | ● | ● | (absence) | ● | |
 | [MLflow traces](#mlflow-traces) | Recorded evidence of every model call and tool call | ● | ● | (absence) | ● | |
 | [AAP: jobs and approvals](#aap-automation-controller) | Every change to the cluster, who launched it, who approved it | ● (no write job) | ● | ● | ● (no job) | |
 | [AAP: Event-Driven Ansible](#aap-event-driven-ansible) | Deterministic reaction to known events, without AI | | | ● | | |
@@ -47,8 +48,13 @@ needs two things:
 
 **What to look at.**
 
-- Each alert creates its own session, named `agent:main:cron:<id>`. The first message is the
-  alert, wrapped as external untrusted content (the agent treats it as data).
+- Each alert creates its own session, named `agent:main:cron:<id>` (title
+  `Alert <alertname>`, Sessions page). The first message is the alert, wrapped as external
+  untrusted content (the agent treats it as data).
+- That session is the record of a **one-shot automated run: read only**. Typing in it fails
+  with *"Worker turn session key does not match its placement"*. To continue (case 2), use
+  the Slack thread when the channel is enabled, or open a **new chat** and paste the alert
+  context (see [architecture](architecture.md#alert-sessions-and-the-human-handoff)).
 - Tool calls and their results appear inline: check that only read tools were used before
   the answer, and that write workflows are only launched after you ask for them.
 - The final answer follows the `AGENTS.md` format: root cause, proposed action, confidence.
@@ -56,6 +62,23 @@ needs two things:
 **Without the UI.** `scripts/agent-last-session.sh [session-key]` prints the tool calls and
 the answer of a session from the terminal (`scripts/agent-alert.sh` replays an alert and
 calls it).
+
+## Slack channel (optional)
+
+**What it is for.** The production-like place where people meet the agent: each alert's
+diagnosis is posted to one channel, and the operators continue in the thread. Only when the
+channel is enabled ([phase3-agent/slack](../manifests/phase3-agent/slack/README.md)).
+
+**How to open.** The Slack workspace and channel configured in `SLACK_CHANNEL_ID`. Only the
+members listed in `SLACK_OPERATOR_IDS` can instruct the agent; messages from anyone else are
+ignored.
+
+**What to look at.**
+
+- One message per alert with root cause, proposed workflow and confidence.
+- Your reply in that message's thread starts the agent's follow-up (case 2). The agent reports
+  the AAP job id and the approval wait in the same thread.
+- The Control UI still shows the same sessions, and MLflow the same traces.
 
 ## MLflow traces
 

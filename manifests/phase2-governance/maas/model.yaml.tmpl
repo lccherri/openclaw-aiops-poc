@@ -4,10 +4,10 @@
 #   https://<gateway>/aiops-models/aiops-model/v1/chat/completions  with "model": "aiops-model"
 # and the gateway maps it to targetModel upstream.
 #
-# Model path chosen for the agent (topology B, see docs/architecture.md):
-#   OpenClaw -> NeMo Guardrails -> MaaS (agent subscription/quota) -> internal Red Hat MaaS
-# Topology A (MaaS -> Guardrails) was tested and rejected: the NeMo server does not return
-# `usage`, so MaaS cannot count tokens and the per-agent quota would not apply.
+# Model path of the agent (see docs/architecture.md):
+#   OpenClaw -> MaaS (agent subscription/quota) -> internal Red Hat MaaS
+# Guardrails is a separate consumer: MaaS -> Guardrails breaks the quota (no `usage`, F-05) and
+# Guardrails -> MaaS does not accept OpenClaw's streamed tool calls (F-09).
 apiVersion: maas.opendatahub.io/v1alpha1
 kind: ExternalModel
 metadata:

@@ -1,0 +1,59 @@
+// Rendered by scripts/slack.sh and applied with `openclaw config patch --stdin`
+// (the starter kit seeds openclaw.json only on first start, so the channel is added to the
+// running config instead of openclaw.json5). Values in ${...} come from .env.
+{
+  "plugins": { "allow": ["diagnostics-otel", "slack"] },
+
+  "channels": {
+    "slack": {
+      "enabled": true,
+      "mode": "socket",                       // outbound WebSocket only: no inbound Route
+      "postAs": "bot",                        // posts as the bot identity, never as a person
+      "userTokenReadOnly": true,              // no user token is configured anyway
+      "webhookPath": "/slack/events",         // default; unused in socket mode
+      "botToken": { "source": "env", "provider": "default", "id": "SLACK_BOT_TOKEN" },
+      "appToken": { "source": "env", "provider": "default", "id": "SLACK_APP_TOKEN" },
+
+      // Who may talk to the agent: one channel, named operators, no DMs
+      "dmPolicy": "disabled",
+      "groupPolicy": "allowlist",
+      "channels": {
+        "${SLACK_CHANNEL_ID}": {
+          "requireMention": true,             // top-level messages need @OpenClaw
+          "requireMentionInBotThreads": false, // replies in the alert thread do not
+          "users": ${SLACK_OPERATOR_IDS_JSON},
+          "replyToMode": "all"
+        }
+      },
+      "thread": { "historyScope": "thread", "initialHistoryLimit": 20 },
+
+      // Least privilege on the Slack side: post replies only
+      "configWrites": false,
+      "commands": { "native": false, "nativeSkills": false },
+      "actions": {
+        "reactions": false, "messages": false, "pins": false, "search": false,
+        "permissions": false, "memberInfo": false, "channelInfo": false, "emojiList": false
+      }
+    }
+  },
+
+  // Alert runs stay isolated; their result is posted to the channel. Operators reply in the
+  // thread, which opens a normal session (agent:main:slack:channel:<id>:thread:<ts>) that
+  // reads the thread history, diagnosis included.
+  "hooks": {
+    "mappings": [
+      {
+        "id": "alertmanager",
+        "match": { "path": "alertmanager" },
+        "action": "agent",
+        "agentId": "main",
+        "name": "Alert {{commonLabels.alertname}}",
+        "wakeMode": "now",
+        "deliver": true,
+        "channel": "slack",
+        "to": "channel:${SLACK_CHANNEL_ID}",
+        "messageTemplate": "ALERT {{status}} from Alertmanager. alertname={{commonLabels.alertname}} namespace={{commonLabels.namespace}} pod={{commonLabels.pod}} severity={{commonLabels.severity}} summary={{commonAnnotations.summary}}. Follow the incident procedure in AGENTS.md: diagnose with read-only tools and report root cause and a proposed action."
+      }
+    ]
+  }
+}

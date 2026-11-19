@@ -27,5 +27,6 @@ flowchart LR
 Call format: `POST https://<gateway>/aiops-models/aiops-model/v1/chat/completions` with
 `Authorization: Bearer <key>` and `"model": "aiops-model"` (the MaaS name, not the upstream name).
 
-The agent does not call MaaS directly: NeMo Guardrails calls it with the agent key
-(topology B, see `docs/architecture.md`).
+The agent calls MaaS directly with its own key, through the in-cluster gateway Service. NeMo
+Guardrails is a separate consumer (`other-consumer` key), outside the agent path
+(see `docs/architecture.md#model-path-maas-and-guardrails-order`).

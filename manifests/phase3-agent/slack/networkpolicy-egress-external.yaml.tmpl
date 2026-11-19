@@ -1,0 +1,23 @@
+# Rendered by scripts/slack.sh into rendered/networkpolicy-egress-external.yaml.
+# Optional Slack channel (see README.md). Allows HTTPS to EXTERNAL addresses only: every
+# private range and the cluster/service networks are excluded, so this rule does not open the
+# Kubernetes API (service IP on 443), other namespaces or node addresses. Which external
+# hosts are actually reachable is decided by the EgressFirewall (Slack only).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-external-https
+  namespace: openclaw
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: openclaw
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+${EXCEPT_CIDRS}
+      ports:
+        - { protocol: TCP, port: 443 }

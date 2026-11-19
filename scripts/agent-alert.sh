@@ -21,4 +21,7 @@ status=$(sed -nE 's/.*runId=[^ ]+ status=([a-z]+).*/\1/p' <<<"${line}")
 info "Run ${run_id} finished: status=${status}"
 # hook runs get their own session: agent:main:cron:<jobId>
 key=$(sed -nE 's/.*sessionKey=(agent:[^: ]+:cron:[^: ]+).*/\1/p' <<<"${line}")
+# with channel delivery the log line has no sessionKey: take the most recent alert run
+[[ -n "${key}" ]] || key=$(oc -n "${NS}" exec deploy/openclaw -c gateway -- node /app/dist/index.js sessions --json 2>/dev/null \
+  | python3 -c 'import json,sys; d=json.load(sys.stdin); s=d if isinstance(d,list) else d.get("sessions",d); s=sorted([x for x in s if ":cron:" in x["key"]],key=lambda x:x.get("updatedAt",0),reverse=True); print(s[0]["key"] if s else "")')
 "${REPO_ROOT}/scripts/agent-last-session.sh" ${key:+"${key}"}

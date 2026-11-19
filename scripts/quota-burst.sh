@@ -3,13 +3,13 @@
 # then proves that another consumer (OTHER_CONSUMER_MAAS_KEY) is not affected.
 source "$(dirname "$0")/lib.sh"
 require_cmd curl
-require_env RHOAI_MAAS_URL AGENT_MAAS_KEY OTHER_CONSUMER_MAAS_KEY MAAS_MODEL
+require_env RHOAI_MAAS_URL AGENT_MAAS_KEY OTHER_CONSUMER_MAAS_KEY
 MAX="${MAX_REQUESTS:-500}"
 
 call() {  # call <key> -> prints HTTP code
   curl -sk -o /dev/null -w '%{http_code}' -m 60 "${RHOAI_MAAS_URL}/chat/completions" \
     -H "Authorization: Bearer $1" -H 'Content-Type: application/json' \
-    -d "{\"model\":\"${MAAS_MODEL}\",\"max_tokens\":200,\"messages\":[{\"role\":\"user\",\"content\":\"Write 150 words about SRE.\"}]}"
+    -d "{\"model\":\"aiops-model\",\"max_tokens\":200,\"messages\":[{\"role\":\"user\",\"content\":\"Write 150 words about SRE.\"}]}"
 }
 
 start=$(date +%s); n=0; code=""

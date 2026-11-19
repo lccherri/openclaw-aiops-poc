@@ -12,7 +12,7 @@ spec:
         - aiops-nemo-config
       default: true
   env:
-    - name: OPENAI_API_KEY          # agent subscription key for RHOAI MaaS (topology B)
+    - name: OPENAI_API_KEY          # 'other-consumer' MaaS subscription key (Guardrails runs standalone)
       valueFrom:
         secretKeyRef:
           name: guardrails-maas-credentials

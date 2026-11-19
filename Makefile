@@ -75,6 +75,12 @@ agent: render agent-base ## Deploy OpenClaw with the RHOAI starter kit + POC ove
 	oc -n openclaw rollout status deploy/openclaw --timeout=480s
 	@echo "Control UI: https://$$(oc -n openclaw get route openclaw -o jsonpath='{.spec.host}')"
 
+slack-enable: ## OPTIONAL: Slack channel for alerts + human follow-up (needs SLACK_* in .env)
+	@scripts/slack.sh enable
+
+slack-disable: ## Remove the Slack channel (back to isolated alert sessions, no external egress)
+	@scripts/slack.sh disable
+
 ##@ Phase 4 - Tools and action
 demo-apps: ## Demo applications, PrometheusRules and Alertmanager routing
 	oc apply -k $(M)/demo-apps
@@ -119,4 +125,4 @@ lint: ## Validate YAML and kustomize builds offline
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*##"; printf "Usage: make <target>\n"} /^[a-zA-Z0-9_%-]+:.*?##/ { printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) }' $(MAKEFILE_LIST)
 
-.PHONY: preflight egress-check model-list model-validate phase0 operators platform maas-prereqs explain-crds render governance maas-keys evalhub isolation secrets agent-base agent demo-apps tools aap-config ansible-mcp verify status evidence lint help
+.PHONY: preflight egress-check model-list model-validate phase0 operators platform maas-prereqs explain-crds render governance maas-keys evalhub isolation secrets agent-base agent slack-enable slack-disable demo-apps tools aap-config ansible-mcp verify status evidence lint help
