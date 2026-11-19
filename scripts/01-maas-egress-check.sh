@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Phase 0 - verify that a pod inside the cluster can reach the internal MaaS endpoint.
+# Phase 0 - verify that a pod inside the cluster can reach the corporate MaaS endpoint.
 # The API key is passed through a short-lived Secret (never on the command line / in logs).
 #
 # Usage: scripts/01-maas-egress-check.sh [base-url] [api-key-var-name]

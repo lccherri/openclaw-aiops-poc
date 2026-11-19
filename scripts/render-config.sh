@@ -6,7 +6,7 @@ source "$(dirname "$0")/lib.sh"
 require_env MAAS_MODEL
 
 # Agent model path: RHOAI MaaS in-cluster Service with the agent subscription key.
-# Fallback (risk table): RHOAI_MAAS_INTERNAL_URL empty -> internal Red Hat MaaS directly.
+# Fallback (risk table): RHOAI_MAAS_INTERNAL_URL empty -> corporate MaaS directly.
 if [[ -n "${RHOAI_MAAS_INTERNAL_URL:-}" ]]; then
   MAAS_BASE_URL="${RHOAI_MAAS_INTERNAL_URL}"; AGENT_MODEL="aiops-model"
   export GUARDRAILS_UPSTREAM_URL="${GUARDRAILS_UPSTREAM_URL:-${RHOAI_MAAS_INTERNAL_URL}}"

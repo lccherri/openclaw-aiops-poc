@@ -10,10 +10,10 @@ what the agent can do.
 
 | | |
 |---|---|
-| **Status** | Phases 0-4 done. Phase 5: case 1 ✅; case 2 blocked by the internal MaaS streaming tool parser (F-18); cases 3-5 pending. See [test log](docs/test-log.md#current-status) |
+| **Status** | Phases 0-4 done. Phase 5: case 1 ✅; case 2 blocked by the corporate MaaS streaming tool parser (F-18); cases 3-5 pending. See [test log](docs/test-log.md#current-status) |
 | **Scope** | Internal POC in a lab cluster. Fictitious applications and logs only |
 | **Reference date** | November 2026: OpenShift AI 3.5, AAP 2.6 (June 2026 update), OpenShift 4.22 |
-| **Constraint** | **No GPU.** Inference comes from an internal Red Hat MaaS (OpenAI-compatible API), so vLLM / llm-d are out of scope |
+| **Constraint** | **No GPU.** Inference comes from a corporate MaaS (OpenAI-compatible API), so vLLM / llm-d are out of scope |
 
 ---
 
@@ -85,7 +85,7 @@ flowchart LR
         APP["ns: demo-apps<br/>test applications"]
     end
 
-    EXT["Internal Red Hat MaaS<br/>(model)"]
+    EXT["Corporate MaaS<br/>(model)"]
 
     U <--> OC
     VAULT --> ESO -- "only the agent's keys" --> OC
@@ -236,13 +236,13 @@ Full runbook: [docs/installation.md](docs/installation.md). Test cases:
 
 | Risk | Fallback |
 |---|---|
-| Cluster has no route to the internal MaaS | Fix networking before any installation; the POC cannot proceed without it |
+| Cluster has no route to the corporate MaaS | Fix networking before any installation; the POC cannot proceed without it |
 | MaaS model weak at tool calling | **Happened**: `llama-scout-17b` → `qwen3-14b` (F-01, F-12, F-13) |
-| Internal MaaS streaming tool-call parser mangles arguments | **Open** (F-14, F-18): read tools work (allowlist mitigation); AAP launch tools fail, so the agent cannot launch workflows. Report to the MaaS owners, or put a flat-argument launch tool in front of AAP |
+| Corporate MaaS streaming tool-call parser mangles arguments | **Open** (F-14, F-18): read tools work (allowlist mitigation); AAP launch tools fail, so the agent cannot launch workflows. Report to the MaaS owners, or put a flat-argument launch tool in front of AAP |
 | OpenClaw starter kit (Developer Preview) does not work | Did not happen: the starter kit deployed successfully with the POC overlay |
-| MaaS with an external model (Technology Preview) does not work | OpenClaw calls the internal MaaS directly; quota shown only with the internal MaaS key limits |
+| MaaS with an external model (Technology Preview) does not work | OpenClaw calls the corporate MaaS directly; quota shown only with the corporate MaaS key limits |
 | Guardrails does not support the external model / tool calls | **Happened** (OpenClaw streams; F-09): Guardrails runs standalone in phase 1 |
-| Internal MaaS quota exhausted | Long heartbeat (30 min); concentrate tests in short windows |
+| Corporate MaaS quota exhausted | Long heartbeat (30 min); concentrate tests in short windows |
 | Not enough cluster resources | Lean DataScienceCluster and AAP without Automation Hub (already the default here) |
 
 ## Documentation

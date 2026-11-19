@@ -7,7 +7,7 @@ Standard library only.
 """
 import json, socket, ssl, sys, urllib.request
 
-# Upstream model host (internal Red Hat MaaS), passed by the Makefile from .env
+# Upstream model host (corporate MaaS), passed by the Makefile from .env
 UPSTREAM_HOST = sys.argv[1] if len(sys.argv) > 1 else ""
 
 def mcp_tools(url):
@@ -56,7 +56,7 @@ check("MLflow (traces)", True, tcp("mlflow.redhat-ods-applications.svc.cluster.l
 check("kubernetes API (kubernetes.default.svc:443)", False, tcp("kubernetes.default.svc", 443))
 check("NeMo Guardrails (not in the agent path)", False, tcp("aiops-guardrails.aiops-governance.svc", 80))
 if UPSTREAM_HOST:
-    check("internal Red Hat MaaS directly (bypass quota)", False, tcp(UPSTREAM_HOST, 443))
+    check("corporate MaaS directly (bypass quota)", False, tcp(UPSTREAM_HOST, 443))
 check("internet (1.1.1.1:443)", False, tcp("1.1.1.1", 443))
 check("AAP gateway (not the MCP server)", False, tcp("aap.aap.svc", 80))
 

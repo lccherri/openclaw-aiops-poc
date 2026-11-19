@@ -8,10 +8,10 @@ M := manifests
 preflight: ## Read-only cluster checks (versions, nodes, storage, catalog)
 	@scripts/00-preflight.sh
 
-egress-check: ## Verify a pod can reach the internal MaaS (/v1/models)
+egress-check: ## Verify a pod can reach the corporate MaaS (/v1/models)
 	@scripts/01-maas-egress-check.sh
 
-model-list: ## List models available in the internal MaaS
+model-list: ## List models available in the corporate MaaS
 	@set -a; source .env; set +a; python3 model-validation/tool_calling_test.py --list-models
 
 model-validate: ## Tool-calling pre-validation of MAAS_MODEL (go / no-go)

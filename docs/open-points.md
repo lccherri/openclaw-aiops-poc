@@ -13,7 +13,7 @@ cluster.
 | 3 | How OpenClaw receives alerts via webhook | ✅ Answered | `hooks` mapping at `/hooks/alertmanager` (Bearer token) from an `AlertmanagerConfig`; reaches the agent ~55 s after the alert fires. Each alert is an isolated one-shot run (test-log F-15) |
 | 4 | Which Kubernetes and Prometheus MCP servers to use | ✅ Chosen and running | Kubernetes: `containers/kubernetes-mcp-server` (upstream of Red Hat `openshift-mcp-server`), read-only TOML config (F-08). Prometheus: `pab1it0/prometheus-mcp-server` v1.6.2. Not evaluated: `rhobs/obs-mcp` |
 | 5 | MaaS ↔ NeMo Guardrails order with an external model | ✅ Answered | Topology A (MaaS → Guardrails) breaks the token quota (F-05). Topology B (Guardrails → MaaS) works for non-streaming clients only; OpenClaw always streams, so **Guardrails runs standalone** (F-09) |
-| 6 | Does EvalHub red teaming work against an external model without GPU? | ✅ Answered | Yes. Garak `quick` ran as a CPU job against the internal MaaS (test-log F-07) |
+| 6 | Does EvalHub red teaming work against an external model without GPU? | ✅ Answered | Yes. Garak `quick` ran as a CPU job against the corporate MaaS (test-log F-07) |
 
 ## New open points found while structuring
 
@@ -28,7 +28,7 @@ cluster.
 | 13 | User-workload Thanos Ruler access to kube-state-metrics | ✅ Answered | `DemoAppCrashLooping` fired from the user-workload ruler |
 | 14 | MaaS gateway internal address | ✅ Answered | `maas-default-gateway-data-science-gateway-class.openshift-ingress.svc.cluster.local`, used by the agent and Guardrails (`RHOAI_MAAS_INTERNAL_URL`) |
 | 15 | Text-encoded tool calls from `llama-scout-17b` with `tool_choice=auto` | ✅ Superseded | Model changed to `qwen3-14b` (0/15 text-encoded calls without hint). Mitigation for llama in F-01 |
-| 16 | Internal MaaS streaming tool-call parser (`qwen3-14b`) | 🔴 **Open, blocks case 2** | Empty arguments for parameterless calls (F-14, mitigated) and a missing closing brace for nested arguments (F-18, not mitigated: every AAP launch tool has a nested `requestBody`). Non-streaming is correct, but OpenClaw always streams. Options in D-5 |
+| 16 | Corporate MaaS streaming tool-call parser (`qwen3-14b`) | 🔴 **Open, blocks case 2** | Empty arguments for parameterless calls (F-14, mitigated) and a missing closing brace for nested arguments (F-18, not mitigated: every AAP launch tool has a nested `requestBody`). Non-streaming is correct, but OpenClaw always streams. Options in D-5 |
 
 ## Decisions
 
@@ -61,9 +61,9 @@ cluster.
 |---|---|---|
 | D-1 | How to attach the AAP subscription | ✅ Attached by the owner through the UI (60-day trial) |
 | D-2 | OpenClaw deployment path | ✅ RHOAI agentic starter kit (`red-hat-data-services/agentic-starter-kits/agents/openclaw`), link provided by the owner |
-| D-3 | Webhook alerts produce an empty agent reply (test-log F-12) | ✅ **Option (c)**: the owner added `qwen3-14b` to the internal MaaS; the untrusted-content wrapper stays on (F-13). Options considered: (a) `allowUnsafeExternalContent: true` on the Alertmanager mapping only (blocked by the assistant's safety classifier; needs an explicit owner decision); (b) keep the wrapper and route alerts through a trusted path; (c) another model |
+| D-3 | Webhook alerts produce an empty agent reply (test-log F-12) | ✅ **Option (c)**: the owner added `qwen3-14b` to the corporate MaaS; the untrusted-content wrapper stays on (F-13). Options considered: (a) `allowUnsafeExternalContent: true` on the Alertmanager mapping only (blocked by the assistant's safety classifier; needs an explicit owner decision); (b) keep the wrapper and route alerts through a trusted path; (c) another model |
 | D-4 | Chat channel for the human handoff (test-log F-15) | ✅ **Tested in a separate Slack workspace, then disabled.** A corporate workspace needs admin approval to install the app (not requested). Repo ready: [slack-app-manifest.json](../manifests/phase3-agent/slack/slack-app-manifest.json), `make slack-enable`. Without it, case 2 starts from a new Control UI chat |
-| D-5 | How to unblock case 2 (F-18) | ⬜ **Pending.** Report to the internal MaaS owners (reproduction in F-18), and/or a flat-argument launch tool in front of AAP (same `openclaw-agent` identity and approvals) |
+| D-5 | How to unblock case 2 (F-18) | ⬜ **Pending.** Report to the corporate MaaS owners (reproduction in F-18), and/or a flat-argument launch tool in front of AAP (same `openclaw-agent` identity and approvals) |
 
 ## TEMPLATE / VERIFY inventory
 

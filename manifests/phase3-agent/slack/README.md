@@ -3,7 +3,7 @@
 **Status: tested on 2026-11-19, then disabled (`make slack-disable`).** Socket Mode connected,
 alert diagnoses were posted to the channel, and a reply in the thread opened a normal agent
 session with the diagnosis in its history. The follow-up stopped at the AAP launch call, which
-the internal MaaS mangles when streaming (docs/test-log.md F-18), not at the channel. Issues
+the corporate MaaS mangles when streaming (docs/test-log.md F-18), not at the channel. Issues
 found on the way: F-16 (EgressFirewall, fixed) and F-17 (claimed launch, mitigated). Without
 the channel the POC works with the limitation described in
 [Without Slack](#without-slack-isolated-alert-sessions).
@@ -41,7 +41,7 @@ sequenceDiagram
 
 | Layer | Change | Notes |
 |---|---|---|
-| 01 Isolation | `EgressFirewall` allows only `slack.com`, `wss-primary.slack.com` and `wss-backup.slack.com` (explicit names: wildcards need the `DNSNameResolver` feature, test-log F-16) and denies every other external address. A NetworkPolicy allows HTTPS to **external** IPs only: private ranges and the cluster/service networks are excluded | The Kubernetes API, other namespaces and the internal MaaS stay blocked. `registry.npmjs.org` is allowed only while the plugin is installed |
+| 01 Isolation | `EgressFirewall` allows only `slack.com`, `wss-primary.slack.com` and `wss-backup.slack.com` (explicit names: wildcards need the `DNSNameResolver` feature, test-log F-16) and denies every other external address. A NetworkPolicy allows HTTPS to **external** IPs only: private ranges and the cluster/service networks are excluded | The Kubernetes API, other namespaces and the corporate MaaS stay blocked. `registry.npmjs.org` is allowed only while the plugin is installed |
 | 02 Identity | Bot and app tokens in `poc-vault/openclaw-slack-credentials`, copied by ESO to `openclaw/openclaw-slack` | Optional env vars in the gateway: no Secret means no Slack |
 | 03 Tools | Slack actions disabled (`reactions`, `messages`, `pins`, `search`, ...), no native commands, no config writes | The agent can only reply where it was addressed |
 | 03 Tools | Who may instruct the agent: **one channel**, **named operator IDs**, no DMs | Messages from anyone else are ignored |

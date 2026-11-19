@@ -85,7 +85,7 @@ flowchart TB
 | SA `aiops-tools/prometheus-mcp` | MCP pod | `cluster-monitoring-view` (metrics only) | Any other API |
 | SA `aap/aap-automation` | AAP credential `demo-apps-cluster` | Patch / scale / roll back Deployments in `demo-apps` | Delete anything; other namespaces |
 | Slack bot/app tokens (optional) | ESO → `openclaw/openclaw-slack` | Post in the allowlisted channel, receive messages from the allowlisted operators | Slack actions (pins, reactions, search, ...), DMs, config writes |
-| Upstream MaaS key | `aiops-models` (MaaS), `aiops-governance` (EvalHub only) | Call the internal MaaS | Never present in `openclaw` |
+| Upstream MaaS key | `aiops-models` (MaaS), `aiops-governance` (EvalHub only) | Call the corporate MaaS | Never present in `openclaw` |
 
 ```mermaid
 flowchart LR
@@ -112,13 +112,13 @@ The plan left the order between MaaS and NeMo Guardrails open. Both orders were 
 
 ```mermaid
 flowchart LR
-    OC["OpenClaw<br/>MaaS key (SecretRef)"] -->|"in-cluster, service-CA TLS"| M["MaaS gateway<br/>quota per subscription"] --> E[Internal Red Hat MaaS]
+    OC["OpenClaw<br/>MaaS key (SecretRef)"] -->|"in-cluster, service-CA TLS"| M["MaaS gateway<br/>quota per subscription"] --> E[Corporate MaaS]
     G["NeMo Guardrails<br/>(standalone consumer)"] -.->|other-consumer key| M
 ```
 
 Notes:
 
-- The agent has egress only to the MaaS gateway pods; it cannot reach the internal Red Hat
+- The agent has egress only to the MaaS gateway pods; it cannot reach the corporate
   MaaS directly (no quota bypass) nor Guardrails.
 - The TrustyAI operator creates a public Route for Guardrails. Because Guardrails has no
   authentication of its own, the Route is restricted with an IP allowlist (cluster egress
@@ -162,7 +162,7 @@ F-15). Where the human continues depends on the channel:
 
 The production pattern is the first one: automation produces the diagnosis, and the human
 conversation happens in the team's chat tool. The Slack path was tested end to end up to the
-workflow launch, which fails because of the internal MaaS streaming parser (test-log F-18),
+workflow launch, which fails because of the corporate MaaS streaming parser (test-log F-18),
 and then disabled.
 
 ### Case 3: known event, no AI

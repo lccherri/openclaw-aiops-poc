@@ -1,11 +1,11 @@
 # Rendered by scripts/render-config.sh into rendered/model.yaml (values from .env).
-# The internal Red Hat MaaS registered as an external OpenAI-compatible provider
+# The corporate MaaS registered as an external OpenAI-compatible provider
 # (MaaS external models: Technology Preview in RHOAI 3.5). Consumers call
 #   https://<gateway>/aiops-models/aiops-model/v1/chat/completions  with "model": "aiops-model"
 # and the gateway maps it to targetModel upstream.
 #
 # Model path of the agent (see docs/architecture.md):
-#   OpenClaw -> MaaS (agent subscription/quota) -> internal Red Hat MaaS
+#   OpenClaw -> MaaS (agent subscription/quota) -> corporate MaaS
 # Guardrails is a separate consumer: MaaS -> Guardrails breaks the quota (no `usage`, F-05) and
 # Guardrails -> MaaS does not accept OpenClaw's streamed tool calls (F-09).
 apiVersion: maas.opendatahub.io/v1alpha1

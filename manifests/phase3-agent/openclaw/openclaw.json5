@@ -42,7 +42,7 @@
             "name": "AIOps model (RHOAI MaaS)",
             "reasoning": false,
             "input": ["text"],
-            "contextWindow": 40960,          // qwen3-14b max_model_len on the internal MaaS
+            "contextWindow": 40960,          // qwen3-14b max_model_len on the corporate MaaS
             "maxTokens": 4096
           }
         ]
@@ -74,7 +74,7 @@
     "servers": {
       // Read-only (RBAC "view" on demo-apps + server read_only mode)
       // toolFilter: only the read tools the incident procedure needs. Parameterless tools are
-      // left out on purpose: the internal MaaS streams them with arguments "" (test-log F-14).
+      // left out on purpose: the corporate MaaS streams them with arguments "" (test-log F-14).
       "kubernetes": {
         "transport": "streamable-http",
         "url": "http://kubernetes-mcp.aiops-tools.svc:8080/mcp",

@@ -188,7 +188,7 @@ Repeatable proofs that do not depend on reading a UI:
 | Command | Proves |
 |---|---|
 | `make verify` | The agent identity cannot write to the cluster, and the agent pod holds no cluster token (17 checks) |
-| `make isolation` | From the agent namespace, only the allowed services are reachable; the Kubernetes API, the Internet, Guardrails and the internal MaaS are not (9 checks) |
+| `make isolation` | From the agent namespace, only the allowed services are reachable; the Kubernetes API, the Internet, Guardrails and the corporate MaaS are not (9 checks) |
 | `make case5-trigger` | Quota burst: HTTP 429 for the agent key and HTTP 200 for the other consumer |
 | `scripts/agent-last-session.sh` | Tool calls and answer of the latest (or a given) agent session |
 | `make evidence` | Snapshot of pods, events, AAP jobs/approvals and the timeline into `evidence/` |

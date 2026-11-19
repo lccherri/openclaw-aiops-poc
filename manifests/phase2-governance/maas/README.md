@@ -10,7 +10,7 @@ flowchart LR
     GW -- "AuthPolicy: key -> subscription" --> GW
     GW -- "TokenRateLimitPolicy: quota per subscription" --> GW
     GW --> BE{"backend"}
-    BE --> EXT[Internal Red Hat MaaS]
+    BE --> EXT[Corporate MaaS]
 
 ```
 
@@ -19,7 +19,7 @@ flowchart LR
 | Object | File | Notes |
 |---|---|---|
 | Gateway `maas-default-gateway` + Route, PostgreSQL, Authorino CA trust | `phase1-platform/rhoai/maas-*.yaml`, `scripts/maas-prereqs.sh` | MaaS prerequisites (test-log F-02/F-03) |
-| `ExternalModel` + `MaaSModelRef` `aiops-model` | `model.yaml.tmpl` (rendered) | Internal Red Hat MaaS as external OpenAI provider (Technology Preview) |
+| `ExternalModel` + `MaaSModelRef` `aiops-model` | `model.yaml.tmpl` (rendered) | Corporate MaaS as external OpenAI provider (Technology Preview) |
 | Consumer identities | `consumers.yaml` | One ServiceAccount per consumer |
 | `MaaSAuthPolicy` + `MaaSSubscription` (`openclaw-agent`, `other-consumer`) | `access.yaml` | Token quota per subscription |
 | API keys | `scripts/maas-mint-keys.sh` | `POST /maas-api/v1/api-keys` with a short-lived SA token; stored in `.env` |

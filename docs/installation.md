@@ -50,7 +50,7 @@ make preflight
 Checks login, OpenShift version, nodes, default StorageClass, S3 (NooBaa), user workload
 monitoring, catalog packages, and that no GPU operator is installed. Read-only.
 
-### 2. Validate egress to the internal MaaS (**gate**)
+### 2. Validate egress to the corporate MaaS (**gate**)
 
 ```bash
 make egress-check
@@ -73,7 +73,7 @@ make model-validate             # 5 scenarios x 3 runs, 3 fictitious tools
 | Endpoint accepts `tools` | The script stops with an explicit error if not |
 | Right tool + right arguments in most attempts | Summary line `right tool + args`; GO when ≥ 80% |
 | Key limits (requests/min, tokens/day) | `rate-limit headers` in the summary + MaaS documentation |
-| Usage policy allows lab logs (fictitious data) | Confirm with the internal MaaS owners |
+| Usage policy allows lab logs (fictitious data) | Confirm with the corporate MaaS owners |
 
 Record model, accuracy and limits in the test log. **NO-GO → switch models.**
 

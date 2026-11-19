@@ -72,7 +72,7 @@ from alert to diagnosis** (MTTR reference).
 
 **Preparation.** Case 1 in progress (application broken, diagnosis delivered).
 
-> **Status (2026-11-19): blocked.** With the internal MaaS (`qwen3-14b`) the agent cannot
+> **Status (2026-11-19): blocked.** With the corporate MaaS (`qwen3-14b`) the agent cannot
 > launch AAP workflows: the streamed tool call loses its closing brace (test-log F-18, D-5).
 > The steps below are the target procedure once that is fixed.
 
@@ -229,7 +229,7 @@ Alternative (more realistic but slower): set `OPENCLAW_HEARTBEAT=1m`, then run `
 | Terminal: `make case5-trigger` output | HTTP 200 until the limit, then HTTP 429 for the agent key; HTTP 200 for the other consumer | Per-consumer quota enforced by the platform (5.1, 5.2) |
 | MaaS: subscriptions (`oc -n aiops-models get maassubscription`) | Independent limits for `openclaw-agent` and `other-consumer` | The quota is configured per consumer, not per model |
 | OpenClaw Control UI (optional step 3) | A clear model error in the session, no answer from another model | No fallback to an unmetered path (5.3) |
-| Terminal: `make isolation` | Internal MaaS not reachable from the agent namespace | The agent cannot bypass the quota by calling the model directly |
+| Terminal: `make isolation` | Corporate MaaS not reachable from the agent namespace | The agent cannot bypass the quota by calling the model directly |
 
 **Evidence:** `evidence/timeline/case5-quota.log`, MaaS metrics/dashboard.
 

@@ -11,10 +11,10 @@ passwords or cluster hostnames.
 | Phases 0-4 | ✅ Installed (installation log below) |
 | Gates | `make verify` 17/17, `make isolation` 9/9 |
 | Case 1: read-only diagnosis | ✅ Pass (Run 1): correct root cause and proposal, read-only tools, no AAP job |
-| Case 2: action with approval | ❌ Blocked (Run 2): the agent cannot launch AAP workflows through the internal MaaS (F-18) |
+| Case 2: action with approval | ❌ Blocked (Run 2): the agent cannot launch AAP workflows through the corporate MaaS (F-18) |
 | Cases 3, 4, 5 | ☐ Not run yet |
 | Optional Slack channel | Tested (alert → channel → thread session), then **disabled**; repo ready (`make slack-enable`, D-4) |
-| Open issue | F-18: internal MaaS streaming tool parser drops the closing brace of nested arguments. Options: report to the MaaS owners, or a flat-argument launch tool in front of AAP |
+| Open issue | F-18: corporate MaaS streaming tool parser drops the closing brace of nested arguments. Options: report to the MaaS owners, or a flat-argument launch tool in front of AAP |
 
 ## Environment snapshot
 
@@ -31,7 +31,7 @@ passwords or cluster hostnames.
 | OpenClaw image | `ghcr.io/openclaw/openclaw@sha256:d0ded1dd…` (OpenClaw 2026.9.8, pinned by the starter kit) |
 | Kubernetes MCP image | `quay.io/containers/kubernetes_mcp_server@sha256:024cf8d0…` (latest on 2026-11-19) |
 | Prometheus MCP image | `ghcr.io/pab1it0/prometheus-mcp-server@sha256:49196d40…` (v1.6.2) |
-| Model (internal MaaS) | **`qwen3-14b`** since 2026-11-19 (F-13); `llama-scout-17b` used until then. Served context: 40,960 tokens |
+| Model (corporate MaaS) | **`qwen3-14b`** since 2026-11-19 (F-13); `llama-scout-17b` used until then. Served context: 40,960 tokens |
 | Deployment | **RHOAI agentic starter kit** (`red-hat-data-services/agentic-starter-kits`, `agents/openclaw`, commit `3778e00`) + POC overlay |
 | Model path | agent → MaaS (agent key, quota) → model. Guardrails standalone (outside the agent path), see F-05 and F-09 |
 
@@ -44,7 +44,7 @@ passwords or cluster hostnames.
 | Model tool-calling validation | 2026-11-18 | ✅ GO | `llama-scout-17b`: **15/15 (100%)** with `tool_choice=auto` + tool hint. See finding F-01 below. Limits: 500 requests / 400k tokens per window (window length not exposed in headers) |
 | Model tool-calling validation (`qwen3-14b`) | 2026-11-19 | ✅ GO | **15/15 without the tool hint**, direct and through the POC MaaS with the agent key (`evidence/model-validation-qwen3-*.json`) |
 | `make verify` (privileges) | 2026-11-19 | ✅ | 17/17: RBAC checks + agent pod (no SA token in the gateway container; token only in the tracing sidecar) |
-| Isolation probe (`make isolation`) | 2026-11-19 | ✅ | 9/9: MCP servers, MaaS gateway and MLflow reachable; Kubernetes API, Guardrails, internal MaaS (quota bypass), Internet and AAP gateway blocked. Kubernetes MCP: 14 tools, none mutating |
+| Isolation probe (`make isolation`) | 2026-11-19 | ✅ | 9/9: MCP servers, MaaS gateway and MLflow reachable; Kubernetes API, Guardrails, corporate MaaS (quota bypass), Internet and AAP gateway blocked. Kubernetes MCP: 14 tools, none mutating |
 
 ## Findings
 
@@ -163,7 +163,7 @@ wrapper. See F-13.
 
 ### F-13: `qwen3-14b` handles the untrusted-content wrapper (Phase 5, case 1)
 
-The owner added `qwen3-14b` to the internal MaaS. Results:
+The owner added `qwen3-14b` to the corporate MaaS. Results:
 
 - Tool-calling gate: 15/15 **without** the tool hint (llama-scout needed it), direct and via the
   POC MaaS (`ExternalModel.targetModel` changed; the agent still calls `aiops-model`).
@@ -193,7 +193,7 @@ Mitigation (no change to security controls; it narrows them):
   `execute_range_query`): parameterless tools (`namespaces_list`, `health_check`,
   `list_metrics`, ...) are no longer exposed. Fewer tools also means a smaller prompt.
 - `AGENTS.md`: always pass at least one argument (e.g. `page_size` for `ansible__*_list`).
-- Permanent fix belongs upstream: the internal MaaS streaming tool parser should emit `"{}"`
+- Permanent fix belongs upstream: the corporate MaaS streaming tool parser should emit `"{}"`
   (or OpenClaw could treat `""` as `{}`).
 
 After F-13/F-14: **3/3 consecutive webhook runs `status=ok`**, 25-60 s from alert to answer;
@@ -269,7 +269,7 @@ Reproduced outside OpenClaw with the real schema of
 | Streaming (what OpenClaw always uses) | **0/6 valid**: arguments end one `}` short, e.g. `{"id": "9", "requestBody": {"extra_vars": "..."}` |
 | Non-streaming | 3/3 valid |
 
-Same family as F-14: the internal MaaS streaming tool parser for `qwen3-14b` mangles arguments
+Same family as F-14: the corporate MaaS streaming tool parser for `qwen3-14b` mangles arguments
 (empty arguments in F-14, missing final brace for nested objects here). Read tools have flat
 arguments and work; **every AAP launch tool has a nested `requestBody`, so the agent cannot
 launch any workflow**. Write-path controls are untouched (nothing reached AAP).
@@ -282,7 +282,7 @@ launch any workflow**. Write-path controls are untouched (nothing reached AAP).
 | 5. RHCL | 2026-11-19 | ✅ | cert-manager pre-installed. Kuadrant needed an operator restart after RHOAI created the GatewayClass (F-02) |
 | 6. OpenShift AI 3.5 + DSC | 2026-11-19 | ✅ | MaaS moved to `aigateway.modelsAsAService` in 3.5 (F-02). MaaS prerequisites: Gateway, PostgreSQL, Authorino CA trust (F-03) |
 | 7. AAP 2.6 | 2026-11-19 | ✅ | Gateway, Controller, EDA; no Hub. Fixed empty `public_base_url` (F-04). Subscription attached by the owner (60-day trial) |
-| 8. MaaS external model + subscriptions | 2026-11-19 | ✅ | `aiops-model` → internal MaaS; subscriptions `openclaw-agent` (2M tok/h after F-10) and `other-consumer` (100k tok/h); one key per ServiceAccount. Tool calling via MaaS: 15/15 |
+| 8. MaaS external model + subscriptions | 2026-11-19 | ✅ | `aiops-model` → corporate MaaS; subscriptions `openclaw-agent` (2M tok/h after F-10) and `other-consumer` (100k tok/h); one key per ServiceAccount. Tool calling via MaaS: 15/15 |
 | 9. NeMo Guardrails | 2026-11-19 | ⚠️ | Works standalone (rails block credentials and injection; tools 15/15 non-streaming) but **cannot sit in the agent path**: OpenClaw always streams (F-09). Kept as a separate consumer of MaaS |
 | 10. MLflow | 2026-11-19 | ✅ | Instance `mlflow` (SQLite + PVC); workspace `openclaw`, experiment `openclaw-aiops` (id 1); agent traces arriving (OTel sidecar) |
 | 11. EvalHub (+ Garak) | 2026-11-19 | ✅ | Works without GPU against the external model. Garak `quick` (DAN 11.0): **attack_success_rate = 1.0** (F-07) |
