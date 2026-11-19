@@ -121,15 +121,15 @@ flowchart LR
     MON -- "alert (webhook)" --> OC
     MON -- "known events" --> EDA
     OC -- "agent MaaS key" --> MAAS --> EXT
-    GR -. "standalone consumer" .-> MAAS
-    OC -. "traces (OTLP)" .-> MLF
+    GR -.->|"standalone consumer"| MAAS
+    OC -.->|"traces (OTLP)"| MLF
     OC --> MK
     OC --> MP
     OC -- "read: catalog, job output" --> AMCP --> CTRL
     OC -- "launch_remediation<br/>(agent's AAP token)" --> FAC --> CTRL
     CTRL -- "SA aap-automation<br/>(write only in demo-apps)" --> APP
     EDA --> CTRL
-    EVH -. "evaluates" .-> EXT
+    EVH -.->|"evaluates"| EXT
     MK -. read .-> APP
 ```
 
