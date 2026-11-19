@@ -1,0 +1,78 @@
+# Gateway required by RHOAI 3.5 Models-as-a-Service (AITenant / MaasTenantConfig expect
+# openshift-ingress/maas-default-gateway, created by the cluster admin). It reuses the
+# GatewayClass created by RHOAI (OpenShift Gateway API implementation, Istio-based).
+# Exposure: ClusterIP Service (no cloud LoadBalancer in this lab) + OpenShift Route, the
+# same pattern RHOAI uses for its data-science-gateway. TLS: OpenShift service CA.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: maas-default-gateway-config
+  namespace: openshift-ingress
+data:
+  service: |
+    metadata:
+      annotations:
+        service.beta.openshift.io/serving-cert-secret-name: "maas-default-gateway-tls"
+    spec:
+      type: ClusterIP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: maas-default-gateway
+  namespace: openshift-ingress
+spec:
+  gatewayClassName: data-science-gateway-class
+  infrastructure:
+    parametersRef:
+      group: ""
+      kind: ConfigMap
+      name: maas-default-gateway-config
+  listeners:
+    # 1st listener: external hostname. The MaaS API reads listeners[0].hostname to build
+    # tenant/key metadata and fails without it. ${MAAS_HOSTNAME} = maas.apps.<cluster-domain>
+    # (rendered by scripts/maas-prereqs.sh).
+    - name: https
+      hostname: ${MAAS_HOSTNAME}
+      port: 443
+      protocol: HTTPS
+      allowedRoutes:
+        namespaces:
+          from: All
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - group: ""
+            kind: Secret
+            name: maas-default-gateway-tls
+    # 2nd listener: no hostname, for in-cluster clients (the agent) calling the Service.
+    - name: https-internal
+      port: 443
+      protocol: HTTPS
+      allowedRoutes:
+        namespaces:
+          from: All
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - group: ""
+            kind: Secret
+            name: maas-default-gateway-tls
+---
+# External access (tests from a workstation). The agent uses the internal Service:
+# https://maas-default-gateway-data-science-gateway-class.openshift-ingress.svc
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: maas-default-gateway
+  namespace: openshift-ingress
+spec:
+  host: ${MAAS_HOSTNAME}
+  to:
+    kind: Service
+    name: maas-default-gateway-data-science-gateway-class
+  port:
+    targetPort: 443
+  tls:
+    termination: reencrypt
+    insecureEdgeTerminationPolicy: Redirect

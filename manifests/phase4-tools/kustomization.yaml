@@ -4,6 +4,7 @@ resources:
   - namespace.yaml
   - networkpolicies.yaml
   - mcp-kubernetes/rbac.yaml
+  - mcp-kubernetes/config.yaml
   - mcp-kubernetes/deployment.yaml
   - mcp-prometheus/rbac.yaml
   - mcp-prometheus/deployment.yaml
@@ -12,7 +13,7 @@ resources:
 images:
   - name: kubernetes-mcp-server
     newName: quay.io/containers/kubernetes_mcp_server
-    newTag: latest               # PIN before the tests
+    digest: sha256:024cf8d0b9ff4678313f7571e9af6df3bc88a5f6c147d3d5d251cc2ce8e3f2c8   # "latest" on 2026-11-19
   - name: prometheus-mcp-server
     newName: ghcr.io/pab1it0/prometheus-mcp-server
-    newTag: latest               # PIN before the tests
+    digest: sha256:49196d4099e8c2f64d05d7f6ee0f3a5fa8d89e3dc304b6ff96146e05afd984c1   # v1.6.2

@@ -1,0 +1,83 @@
+# POC changes on top of the starter kit Deployment (strategic merge):
+#  - no ServiceAccount token in the gateway container (projected token only in the sidecar)
+#  - MLflow tracing sidecar, adapted from the kit's overlays/mlflow-tracing
+#  - agent rules (AGENTS.md) seeded into the workspace on every start
+#  - POC env: MaaS key + service CA, hooks token, AAP MCP token
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openclaw
+spec:
+  template:
+    spec:
+      serviceAccountName: openclaw-tracing
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: seed-workspace
+          image: ghcr.io/openclaw/openclaw@sha256:d0ded1dd76939b2bf4d67ef2d13247b8b160aa5666331d4a0b0e58811182cbb8
+          command: ["sh", "-c", "mkdir -p /home/node/.openclaw/workspace && cp /seed/AGENTS.md /home/node/.openclaw/workspace/AGENTS.md && echo 'AGENTS.md seeded'"]
+          volumeMounts:
+            - { name: data, mountPath: /home/node }
+            - { name: seed-workspace, mountPath: /seed }
+          resources:
+            limits: { memory: 64Mi, cpu: 100m }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+      containers:
+        - name: gateway
+          envFrom:
+            - configMapRef: { name: openclaw-env }
+          env:
+            - name: MAAS_API_KEY
+              valueFrom: { secretKeyRef: { name: openclaw-secrets, key: MAAS_API_KEY } }
+            # Trust the OpenShift service CA (MaaS gateway certificate) - a CA, not a credential
+            - { name: NODE_EXTRA_CA_CERTS, value: /etc/pki/service-ca/service-ca.crt }
+            - name: OPENCLAW_HOOKS_TOKEN
+              valueFrom: { secretKeyRef: { name: openclaw-secrets, key: OPENCLAW_HOOKS_TOKEN } }
+            - name: AAP_MCP_TOKEN
+              valueFrom: { secretKeyRef: { name: openclaw-secrets, key: AAP_MCP_TOKEN, optional: true } }
+            - { name: OTEL_EXPORTER_OTLP_ENDPOINT, value: "http://localhost:4318" }
+            - { name: OTEL_EXPORTER_OTLP_PROTOCOL, value: "http/protobuf" }
+          volumeMounts:
+            - { name: service-ca, mountPath: /etc/pki/service-ca, readOnly: true }
+        # From the starter kit overlays/mlflow-tracing (same image/digest).
+        - name: otel-collector
+          image: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib@sha256:85ac41c2db88d0df9bd6145e608a3cb023f5d8443868adbfbbf66efb51087917  # 0.120.0
+          args: ["--config=/etc/otel/config.yaml"]
+          ports:
+            - { containerPort: 4318, name: otlp-http }
+          volumeMounts:
+            - { name: otel-config, mountPath: /etc/otel }
+            - { name: mlflow-token, mountPath: /var/run/secrets/kubernetes.io/serviceaccount, readOnly: true }
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: 200m, memory: 384Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            seccompProfile: { type: RuntimeDefault }
+            capabilities: { drop: ["ALL"] }
+      volumes:
+        - name: config
+          configMap: { name: openclaw-poc-config }
+        - name: seed-workspace
+          configMap: { name: openclaw-workspace }
+        - name: service-ca
+          configMap: { name: openshift-service-ca.crt }
+        - name: otel-config
+          configMap:
+            name: otel-collector-config
+            items: [{ key: config.yaml, path: config.yaml }]
+        # SA token (MLflow tracing only) + CAs, mounted ONLY in the otel-collector container.
+        - name: mlflow-token
+          projected:
+            sources:
+              - serviceAccountToken: { path: token, expirationSeconds: 3600 }
+              - configMap: { name: kube-root-ca.crt, items: [{ key: ca.crt, path: ca.crt }] }
+              - configMap: { name: openshift-service-ca.crt, items: [{ key: service-ca.crt, path: service-ca.crt }] }

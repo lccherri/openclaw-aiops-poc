@@ -6,7 +6,6 @@ metadata:
   name: aap
   namespace: aap
 spec:
-  public_base_url: ""          # optional: set to https://aap-aap.apps.<cluster-domain>
   controller:
     disabled: false
   eda:

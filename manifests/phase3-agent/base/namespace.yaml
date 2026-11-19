@@ -4,6 +4,7 @@ metadata:
   name: openclaw
   labels:
     poc.aiops/purpose: agent
+    poc.aiops/mlflow-workspace: "true"     # exposed as MLflow workspace "openclaw"
     # Control layer 01 - isolation: enforce the "restricted" Pod Security profile
     pod-security.kubernetes.io/enforce: restricted
     pod-security.kubernetes.io/audit: restricted

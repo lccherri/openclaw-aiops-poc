@@ -40,24 +40,17 @@ spec:
       app.kubernetes.io/name: openclaw
   policyTypes: ["Egress"]
   egress:
-    # RHOAI MaaS gateway (Gateway API data plane runs in openshift-ingress).
-    # Use the internal Service address of the gateway in MAAS_BASE_URL.
+    # The ONLY model path: the RHOAI MaaS gateway pods (Gateway API data plane in
+    # openshift-ingress), reached through the in-cluster Service with the agent key.
     - to:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: openshift-ingress
+          podSelector:
+            matchLabels:
+              gateway.networking.k8s.io/gateway-name: maas-default-gateway
       ports:
         - { protocol: TCP, port: 443 }
-        - { protocol: TCP, port: 80 }
-        - { protocol: TCP, port: 8443 }
-    # NeMo Guardrails (only used by topology B: agent -> guardrails -> MaaS).
-    - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: aiops-governance
-      ports:
-        - { protocol: TCP, port: 8000 }
-        - { protocol: TCP, port: 8443 }
     # Fallback "direct to internal MaaS" (risk table): uncomment and set the CIDR.
     # - to:
     #     - ipBlock:
@@ -90,10 +83,9 @@ spec:
               kubernetes.io/metadata.name: aap
           podSelector:
             matchLabels:
-              app.kubernetes.io/component: mcp-server    # VERIFY label after deploying AnsibleMCPServer
+              app.kubernetes.io/component: ansible-mcp-server   # set by the AAP MCP operator
       ports:
-        - { protocol: TCP, port: 8080 }
-        - { protocol: TCP, port: 8443 }
+        - { protocol: TCP, port: 8086 }
     # MLflow (traces via OTLP/HTTP)
     - to:
         - namespaceSelector:

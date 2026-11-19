@@ -1,8 +1,18 @@
-# TEMPLATE - verify with `oc explain evalhub.spec` (TrustyAI EvalHub, GA in RHOAI 3.5).
-apiVersion: trustyai.opendatahub.io/v1alpha1   # VERIFY
+# EvalHub (TrustyAI, GA in RHOAI 3.5) - schema validated with `oc explain`.
+# Single-tenant instance in aiops-governance with the out-of-the-box providers needed
+# by the POC: Garak (red teaming / prompt injection) and lm-evaluation-harness.
+apiVersion: trustyai.opendatahub.io/v1
 kind: EvalHub
 metadata:
   name: evalhub
   namespace: aiops-governance
 spec:
+  tenancy: single
   replicas: 1
+  database:
+    type: sqlite
+  providers:
+    - garak
+    - lm-evaluation-harness
+  collections:
+    - safety-and-fairness-v1

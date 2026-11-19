@@ -26,9 +26,7 @@ spec:
         - name: mcp
           image: kubernetes-mcp-server
           args:
-            - --port=8080
-            - --read-only
-            - --disable-destructive
+            - --config=/etc/kubernetes-mcp/config.toml
           ports:
             - { name: http, containerPort: 8080 }
           readinessProbe:
@@ -39,6 +37,11 @@ spec:
           securityContext:
             allowPrivilegeEscalation: false
             capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - { name: config, mountPath: /etc/kubernetes-mcp, readOnly: true }
+      volumes:
+        - name: config
+          configMap: { name: kubernetes-mcp-config }
 ---
 apiVersion: v1
 kind: Service

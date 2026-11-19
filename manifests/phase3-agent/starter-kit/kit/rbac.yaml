@@ -1,0 +1,20 @@
+# Identity of the agent pod. Its ONLY permission is MLflow tracing in its own workspace
+# (ClusterRole shipped by the MLflow operator, bound in namespace openclaw). The token is
+# mounted only into the OTel collector sidecar, never into the OpenClaw gateway container.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: openclaw-tracing
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: openclaw-tracing-mlflow
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: mlflow-operator-mlflow-integration
+subjects:
+  - kind: ServiceAccount
+    name: openclaw-tracing

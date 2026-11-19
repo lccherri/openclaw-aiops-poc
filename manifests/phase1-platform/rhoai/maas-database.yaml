@@ -1,0 +1,75 @@
+# PostgreSQL required by the RHOAI 3.5 MaaS API (subscriptions, API keys, usage).
+# Lab-grade single instance. The connection Secret "maas-db-config" (key DB_CONNECTION_URL)
+# in redhat-ai-gateway-infra and the credentials Secret below are created by
+# scripts/maas-prereqs.sh (password generated in-cluster, never committed).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: aiops-maas-db
+  labels:
+    poc.aiops/purpose: maas-database
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: maas-postgres
+  namespace: aiops-maas-db
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: maas-postgres
+  namespace: aiops-maas-db
+  labels:
+    app.kubernetes.io/name: maas-postgres
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: maas-postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: maas-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: registry.redhat.io/rhel9/postgresql-16:latest
+          envFrom:
+            - secretRef:
+                name: maas-postgres-credentials   # POSTGRESQL_USER/PASSWORD/DATABASE
+          ports:
+            - { name: postgres, containerPort: 5432 }
+          readinessProbe:
+            exec:
+              command: ["/usr/libexec/check-container"]
+            initialDelaySeconds: 10
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { cpu: "1", memory: 1Gi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/pgsql/data }
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: maas-postgres }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: maas-postgres
+  namespace: aiops-maas-db
+spec:
+  selector:
+    app.kubernetes.io/name: maas-postgres
+  ports:
+    - { name: postgres, port: 5432, targetPort: postgres }

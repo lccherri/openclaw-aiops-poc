@@ -4,3 +4,4 @@ metadata:
   name: aiops-models
   labels:
     poc.aiops/purpose: model-governance
+    istio-injection: enabled          # required for MaaS external models (upstream docs)

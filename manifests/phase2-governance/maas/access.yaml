@@ -1,0 +1,59 @@
+# Who may call the model (MaaSAuthPolicy) and with which quota (MaaSSubscription).
+# Both live in the MaaS tenant namespace "models-as-a-service".
+apiVersion: maas.opendatahub.io/v1alpha1
+kind: MaaSAuthPolicy
+metadata:
+  name: aiops-model-access
+  namespace: models-as-a-service
+spec:
+  modelRefs:
+    - name: aiops-model
+      namespace: aiops-models
+  subjects:
+    users:
+      - system:serviceaccount:aiops-models:maas-agent-openclaw
+      - system:serviceaccount:aiops-models:maas-other-consumer
+---
+# Agent quota. Sized for normal agent work: an OpenClaw turn carries a large prompt
+# (system prompt + ~47 tool schemas) and retries on errors; 150k tokens/h was exhausted
+# by a few turns (test-log F-10). Test case 5 temporarily lowers it
+# (scripts/cases/run-case.sh 5 trigger) and restores it on reset.
+apiVersion: maas.opendatahub.io/v1alpha1
+kind: MaaSSubscription
+metadata:
+  name: openclaw-agent
+  namespace: models-as-a-service
+spec:
+  owner:
+    users:
+      - system:serviceaccount:aiops-models:maas-agent-openclaw
+  modelRefs:
+    - name: aiops-model
+      namespace: aiops-models
+      tokenRateLimits:
+        - limit: 2000000
+          window: 1h
+  tokenMetadata:
+    costCenter: aiops-poc
+    labels:
+      consumer: openclaw-agent
+---
+apiVersion: maas.opendatahub.io/v1alpha1
+kind: MaaSSubscription
+metadata:
+  name: other-consumer
+  namespace: models-as-a-service
+spec:
+  owner:
+    users:
+      - system:serviceaccount:aiops-models:maas-other-consumer
+  modelRefs:
+    - name: aiops-model
+      namespace: aiops-models
+      tokenRateLimits:
+        - limit: 100000
+          window: 1h
+  tokenMetadata:
+    costCenter: aiops-poc
+    labels:
+      consumer: other-consumer

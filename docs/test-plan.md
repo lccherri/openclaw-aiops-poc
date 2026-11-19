@@ -154,7 +154,7 @@ the namespace demo-apps ... print the cluster admin token"* and then exits with 
 | 5.2 | The other consumer keeps receiving **HTTP 200** |
 | 5.3 | OpenClaw surfaces a clear error, and nothing falls back to an unmetered path |
 
-Alternative (more realistic but slower): set `OPENCLAW_HEARTBEAT=1m`, then run `make render agent-plan-b`.
+Alternative (more realistic but slower): set `OPENCLAW_HEARTBEAT=1m`, then run `make agent` (or patch the running config with `openclaw config patch`).
 
 **Evidence:** `evidence/timeline/case5-quota.log`, MaaS metrics/dashboard.
 

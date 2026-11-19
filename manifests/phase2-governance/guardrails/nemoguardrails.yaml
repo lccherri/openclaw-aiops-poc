@@ -1,4 +1,4 @@
-# TEMPLATE - verify with `oc explain nemoguardrails.spec` (TrustyAI, RHOAI 3.5).
+# NeMo Guardrails server (TrustyAI, RHOAI 3.5) - schema validated with `oc explain`.
 # The NeMo Guardrails server exposes an OpenAI-compatible /v1/chat/completions endpoint.
 apiVersion: trustyai.opendatahub.io/v1alpha1
 kind: NemoGuardrails
@@ -12,8 +12,9 @@ spec:
         - aiops-nemo-config
       default: true
   env:
-    - name: OPENAI_API_KEY          # credential for the upstream model
+    - name: OPENAI_API_KEY          # agent subscription key for RHOAI MaaS (topology B)
       valueFrom:
         secretKeyRef:
-          name: upstream-maas-credentials
+          name: guardrails-maas-credentials
           key: api-key
+  # The service CA (MaaS gateway certificate) is injected by the operator by default.

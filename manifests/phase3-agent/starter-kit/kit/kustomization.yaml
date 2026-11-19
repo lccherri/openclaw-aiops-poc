@@ -1,0 +1,34 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: openclaw
+resources:
+  # Starter kit base manifests, pinned to the reviewed commit (2026-11-10).
+  - https://github.com/red-hat-data-services/agentic-starter-kits//agents/openclaw/deployment/manifests?ref=3778e00d5d6d00128106e99888dac063de1ce555
+  - ../../openclaw                     # POC config: openclaw-poc-config, openclaw-workspace, openclaw-env
+  - rbac.yaml                          # ServiceAccount for the MLflow tracing sidecar
+  - rendered/otel-collector-config.yaml   # rendered by scripts/render-config.sh (experiment id)
+patches:
+  # Credentials come from ESO (Secret openclaw-secrets); drop the kit's placeholder Secret.
+  - target: { kind: Secret, name: openclaw-secrets }
+    patch: |
+      $patch: delete
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: openclaw-secrets
+  # The kit's sample config is replaced by openclaw-poc-config.
+  - target: { kind: ConfigMap, name: openclaw-config }
+    patch: |
+      $patch: delete
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: openclaw-config
+  # Storage class of this cluster (the kit defaults to gp3-csi).
+  - target: { kind: PersistentVolumeClaim, name: openclaw-state }
+    patch: |
+      - op: replace
+        path: /spec/storageClassName
+        value: ocs-external-storagecluster-ceph-rbd
+  - target: { kind: Deployment, name: openclaw }
+    path: deployment-patch.yaml

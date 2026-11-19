@@ -4,6 +4,7 @@ namespace: aiops-governance
 resources:
   - namespace.yaml
   - nemoguardrails.yaml
+  - rendered/route.yaml      # scripts/render-config.sh (git-ignored)
 # config.yaml is rendered (envsubst) by scripts/render-guardrails.sh into
 # guardrails/nemo-config/rendered/ before `oc apply -k`.
 configMapGenerator:

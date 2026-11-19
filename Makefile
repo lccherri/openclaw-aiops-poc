@@ -40,6 +40,9 @@ platform: ## Create Kuadrant, DataScienceCluster, AAP instance and ESO operand
 	@source scripts/lib.sh; \
 	wait_for_jsonpath datasciencecluster/default-dsc "" '{.status.phase}' Ready 1800
 
+maas-prereqs: ## MaaS prerequisites: Gateway, PostgreSQL, Authorino CA trust (idempotent)
+	@scripts/maas-prereqs.sh
+
 explain-crds: ## Dump schemas of preview CRDs (adjust templates before Phase 2)
 	@scripts/explain-crds.sh
 
@@ -47,9 +50,17 @@ explain-crds: ## Dump schemas of preview CRDs (adjust templates before Phase 2)
 render: ## Render git-ignored config (agent.env, guardrails config) from .env
 	@scripts/render-config.sh
 
-governance: render ## Namespaces, guardrails, MLflow, EvalHub (MaaS CRs are opt-in, see README)
-	oc apply -k $(M)/phase2-governance
+governance: render ## MaaS model + subscriptions, Guardrails, MLflow, EvalHub
+	oc apply -f $(M)/phase2-governance/maas/namespace.yaml -f $(M)/phase2-governance/guardrails/namespace.yaml
 	@scripts/create-secrets.sh
+	oc apply -k $(M)/phase2-governance
+
+maas-keys: ## Mint one MaaS key per consumer ServiceAccount and store them in .env
+	@scripts/maas-mint-keys.sh
+	@scripts/create-secrets.sh
+
+evalhub: ## Run the Garak red-team evaluation through EvalHub (BENCHMARK=quick by default)
+	@scripts/evalhub-run.sh
 
 ##@ Phase 3 - Agent
 secrets: ## Create/refresh all Secrets from .env (idempotent)
@@ -58,11 +69,10 @@ secrets: ## Create/refresh all Secrets from .env (idempotent)
 agent-base: ## Namespace openclaw, default-deny NetworkPolicies, ExternalSecret
 	@scripts/create-secrets.sh
 	oc apply -k $(M)/phase3-agent/base
-	oc apply -f $(M)/phase2-governance/mlflow/trace-writer-rbac.yaml
 
-agent-plan-b: render agent-base ## Plan B: deploy OpenClaw directly (Deployment + NetworkPolicy)
-	oc apply -k $(M)/phase3-agent/plan-b
-	oc -n openclaw rollout status deploy/openclaw --timeout=300s
+agent: render agent-base ## Deploy OpenClaw with the RHOAI starter kit + POC overlay
+	oc apply -k $(M)/phase3-agent/starter-kit
+	oc -n openclaw rollout status deploy/openclaw --timeout=480s
 	@echo "Control UI: https://$$(oc -n openclaw get route openclaw -o jsonpath='{.spec.host}')"
 
 ##@ Phase 4 - Tools and action
@@ -74,7 +84,7 @@ tools: ## Read-only MCP servers + AAP ServiceAccount scoped to demo-apps
 	oc apply -k $(M)/phase4-tools
 
 aap-config: ## Configure AAP as code (catalog, workflows with approval, EDA)
-	ansible-playbook aap/config-as-code/configure-aap.yml
+	@scripts/aap-configure.sh
 
 ansible-mcp: ## Deploy the Ansible MCP server (validate the template first)
 	oc apply -f $(M)/phase4-tools/ansible-mcp/ansiblemcpserver.yaml
@@ -82,6 +92,11 @@ ansible-mcp: ## Deploy the Ansible MCP server (validate the template first)
 ##@ Phase 5 - Tests
 verify: ## Privilege checks (success criteria #1 and #4)
 	@scripts/verify-agent-privileges.sh
+
+isolation: ## Network isolation probe from the agent namespace (MCP tools, blocked paths)
+	@set -a; source .env; set +a; \
+	POD_LABELS=app.kubernetes.io/name=openclaw scripts/incluster-python.sh openclaw scripts/isolation-probe.py \
+	  "$$(python3 -c 'import sys,urllib.parse;print(urllib.parse.urlparse(sys.argv[1]).hostname)' "$$MAAS_INTERNAL_URL")"
 
 case%-trigger: ## Trigger a test case, e.g. make case1-trigger
 	@scripts/cases/run-case.sh $* trigger
@@ -104,4 +119,4 @@ lint: ## Validate YAML and kustomize builds offline
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*##"; printf "Usage: make <target>\n"} /^[a-zA-Z0-9_%-]+:.*?##/ { printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) }' $(MAKEFILE_LIST)
 
-.PHONY: preflight egress-check model-list model-validate phase0 operators platform explain-crds render governance secrets agent-base agent-plan-b demo-apps tools aap-config ansible-mcp verify status evidence lint help
+.PHONY: preflight egress-check model-list model-validate phase0 operators platform maas-prereqs explain-crds render governance maas-keys evalhub isolation secrets agent-base agent demo-apps tools aap-config ansible-mcp verify status evidence lint help

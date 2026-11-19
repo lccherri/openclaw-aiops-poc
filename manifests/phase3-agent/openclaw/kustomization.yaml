@@ -1,14 +1,19 @@
-# Agent configuration as ConfigMaps (shared by plan A starter kit and plan B).
+# Agent configuration as ConfigMaps, consumed by the starter-kit overlay.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: openclaw
+generatorOptions:
+  disableNameSuffixHash: true
 configMapGenerator:
-  - name: openclaw-config
+  # Seeded by the starter kit init container into ~/.openclaw/openclaw.json (first start only)
+  - name: openclaw-poc-config
     files:
-      - openclaw.json5
+      - openclaw.json=openclaw.json5
+  # Agent operating rules, copied into the workspace on every start
   - name: openclaw-workspace
     files:
       - workspace/AGENTS.md
+  # Non-secret settings interpolated into openclaw.json (rendered from .env)
   - name: openclaw-env
     envs:
       - agent.env          # git-ignored; created by `make render`

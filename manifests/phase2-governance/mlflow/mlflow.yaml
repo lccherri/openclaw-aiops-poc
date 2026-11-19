@@ -1,14 +1,21 @@
-# TEMPLATE - verify with `oc explain mlflow.spec` after the mlflowoperator component is Ready.
-# One MLflow instance for the platform; the agent writes traces into a workspace that maps
-# to the "openclaw" namespace.
-apiVersion: mlflow.opendatahub.io/v1        # VERIFY
+# MLflow instance (RHOAI 3.5 mlflowoperator, schema validated with `oc explain`).
+# The name must be "mlflow" (CRD validation). Lab sizing: SQLite metadata store and
+# artifacts on a PVC (no S3 needed: agent traces are stored in the backend store).
+# Namespaces labelled poc.aiops/mlflow-workspace=true are exposed as MLflow workspaces;
+# the agent writes traces into the "openclaw" workspace.
+apiVersion: mlflow.opendatahub.io/v1
 kind: MLflow
 metadata:
   name: mlflow
 spec:
-  backendStore:
-    # VERIFY: PostgreSQL managed by the operator or an external DB
-    storageSize: 10Gi
-  artifactStore:
-    s3:
-      bucketFromObc: mlflow-artifacts         # VERIFY: may require explicit endpoint/bucket/secretRef
+  backendStoreUri: sqlite:////mlflow/mlflow.db
+  serveArtifacts: true
+  artifactsDestination: file:///mlflow/artifacts
+  storage:
+    accessModes: ["ReadWriteOnce"]
+    resources:
+      requests:
+        storage: 10Gi
+  workspaceLabelSelector:
+    matchLabels:
+      poc.aiops/mlflow-workspace: "true"

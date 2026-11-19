@@ -1,17 +1,24 @@
 # NeMo Guardrails configuration (content control layer 04).
-# The main model is the upstream model; the base URL / model name are replaced at deploy
-# time by scripts/render-guardrails.sh (values come from .env, never committed).
+# Topology B: OpenClaw -> Guardrails -> RHOAI MaaS (agent subscription, token quota) -> model.
+# Base URL / model are rendered by scripts/render-config.sh from .env (never committed):
+#   GUARDRAILS_UPSTREAM_URL  default: RHOAI_MAAS_INTERNAL_URL (in-cluster MaaS gateway)
+#   GUARDRAILS_MODEL         default: aiops-model (MaaS model name)
 models:
   - type: main
     engine: openai
-    model: ${MAAS_MODEL}
+    model: ${GUARDRAILS_MODEL}
+    api_key_env_var: OPENAI_API_KEY      # agent MaaS key, Secret guardrails-maas-credentials (not read implicitly)
     parameters:
-      openai_api_base: ${GUARDRAILS_UPSTREAM_URL}
+      base_url: ${GUARDRAILS_UPSTREAM_URL}   # NeMo >= 0.22 (was openai_api_base)
 
 instructions:
   - type: general
     content: |
       You are the reasoning model behind an AIOps agent for OpenShift.
+
+# Passthrough: the main LLM call is forwarded unchanged (required for OpenAI `tools` /
+# `tool_calls`, which the agent depends on); input and output rails still run around it.
+passthrough: true
 
 rails:
   input:

@@ -1,0 +1,16 @@
+# Model consumers as distinct identities. Each one owns its own MaaSSubscription,
+# so quotas are independent (test case 5). API keys are minted with each SA's token
+# by scripts/maas-mint-keys.sh; the SA tokens themselves are never given to the agent.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: maas-agent-openclaw
+  namespace: aiops-models
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: maas-other-consumer
+  namespace: aiops-models
+automountServiceAccountToken: false

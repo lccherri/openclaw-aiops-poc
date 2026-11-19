@@ -1,0 +1,14 @@
+# kubernetes-mcp-server configuration (the image moved from CLI flags to TOML).
+# read_only: no mutating tools are exposed at all; disable_destructive: extra safety net.
+# Defense in depth on top of RBAC (ClusterRole "view" bound only in demo-apps).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubernetes-mcp-config
+  namespace: aiops-tools
+data:
+  config.toml: |
+    port = "8080"
+    read_only = true
+    disable_destructive = true
+    log_level = 2

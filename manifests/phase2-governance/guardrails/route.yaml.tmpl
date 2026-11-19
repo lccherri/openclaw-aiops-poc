@@ -1,0 +1,23 @@
+# Rendered by scripts/render-config.sh into rendered/route.yaml.
+# Why a Route: in RHOAI 3.5 the MaaS external-provider reconciler always reaches external
+# models over TLS/443 (the legacy maas.opendatahub.io/tls|port annotations are not carried
+# over to ExternalProvider), so the in-cluster HTTP Service cannot be used as MaaS backend.
+# The Route gives Guardrails a publicly trusted *.apps certificate on 443.
+# Security: Guardrails calls the model with the upstream key and has no auth of its own,
+# so the Route only admits the cluster's own egress IP(s) (GUARDRAILS_ALLOWED_CIDRS).
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: aiops-guardrails
+  namespace: aiops-governance
+  annotations:
+    haproxy.router.openshift.io/ip_allowlist: "${GUARDRAILS_ALLOWED_CIDRS}"
+    haproxy.router.openshift.io/timeout: 300s
+spec:
+  host: ${GUARDRAILS_HOST}
+  to:
+    kind: Service
+    name: aiops-guardrails
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: None

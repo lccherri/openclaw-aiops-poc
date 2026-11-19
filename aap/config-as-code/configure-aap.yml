@@ -6,9 +6,10 @@
 #   - workflows with an approval node for every write action
 #   - EDA project, credential and rulebook activation for the known-event case
 #
-# Run from the repository root (needs the env vars from .env):
-#   ansible-galaxy collection install -r aap/config-as-code/requirements.yml
-#   ansible-playbook aap/config-as-code/configure-aap.yml
+# Runs inside the cluster with AAP's own execution environment (ee-supported-rhel9 ships
+# ansible.controller, ansible.platform, ansible.eda and kubernetes.core):
+#   make aap-config           (scripts/aap-configure.sh)
+# Inputs come from environment variables (.env + K8S_API / K8S_TOKEN set by the script).
 #
 # Module/role names were written for AAP 2.6 collections; legacy `ansible.controller.role`
 # is used for role grants because it accepts object names (deprecated but available).
@@ -21,8 +22,10 @@
     aap_url: "{{ lookup('env', 'AAP_GATEWAY_URL') }}"
     git_repo: "{{ lookup('env', 'GIT_REPO_URL') }}"
     git_branch: "{{ lookup('env', 'GIT_BRANCH') | default('main', true) }}"
-    k8s_api: "{{ lookup('pipe', 'oc whoami --show-server') }}"
-    k8s_token: "{{ lookup('pipe', 'oc get secret aap-automation-token -n aap -o jsonpath={.data.token} | base64 -d') }}"
+    k8s_api: "{{ lookup('env', 'K8S_API') }}"
+    k8s_token: "{{ lookup('env', 'K8S_TOKEN') }}"       # ServiceAccount aap/aap-automation
+    token_file: "{{ lookup('env', 'AGENT_TOKEN_FILE') | default('/tmp/openclaw-agent.token', true) }}"
+    de_image: registry.redhat.io/ansible-automation-platform-26/de-supported-rhel9:latest
     allowed_ns: demo-apps
     namespace_question:
       question_name: Namespace
@@ -226,6 +229,12 @@
           verify_ssl: false
       no_log: true
 
+    - name: Decision environment (none is registered by default)
+      ansible.eda.decision_environment:
+        name: Default Decision Environment
+        organization_name: "{{ org }}"
+        image_url: "{{ de_image }}"
+
     - name: EDA project (same repository, rulebooks under extensions/eda/rulebooks)
       ansible.eda.project:
         name: aiops-poc-rulebooks
@@ -264,15 +273,17 @@
       no_log: true
       when: lookup('env', 'AAP_MCP_TOKEN') | length == 0
 
-    - name: Save the token to a git-ignored file (never printed)
+    - name: Save the token to a file (never printed; collected by scripts/aap-configure.sh)
       ansible.builtin.copy:
-        content: "{{ agent_token.ansible_facts.aap_token.token }}"
-        dest: "{{ playbook_dir }}/../../openclaw-agent.token"
+        content: >-
+          {{ agent_token.ansible_facts.aap_token.token
+             | default(agent_token.token | default(agent_token.ansible_facts.token | default(''))) }}
+        dest: "{{ token_file }}"
         mode: "0600"
       no_log: true
       when: agent_token is not skipped
 
-    - name: Next step
+    - name: Token result structure (keys only, for troubleshooting)
       ansible.builtin.debug:
-        msg: "Copy the content of openclaw-agent.token into .env as AAP_MCP_TOKEN, delete the file and run `make secrets`."
+        msg: "{{ agent_token.keys() | list }} / facts: {{ (agent_token.ansible_facts | default({})).keys() | list }}"
       when: agent_token is not skipped

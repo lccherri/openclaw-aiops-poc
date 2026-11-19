@@ -1,0 +1,21 @@
+# Authorino must trust the OpenShift service CA: it calls the MaaS API over HTTPS
+# (maas-api:8443, service-CA certificate) to validate API keys and select subscriptions.
+# Without this every inference request is denied (x509: unknown authority -> HTTP 403).
+# Both ConfigMaps are mounted together at /etc/pki/tls/certs (see scripts/maas-prereqs.sh):
+#   ca-bundle.crt  <- cluster trusted bundle (system CAs + cluster proxy CAs)
+#   service-ca.crt <- OpenShift service CA
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: authorino-trusted-ca
+  namespace: kuadrant-system
+  labels:
+    config.openshift.io/inject-trusted-cabundle: "true"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: authorino-service-ca
+  namespace: kuadrant-system
+  annotations:
+    service.beta.openshift.io/inject-cabundle: "true"

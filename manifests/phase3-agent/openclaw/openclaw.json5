@@ -1,26 +1,50 @@
 {
-  // OpenClaw configuration for the AIOps POC (JSON5).
-  // ${VAR} values are resolved by OpenClaw from the container environment
-  // (Secret openclaw-credentials + ConfigMap openclaw-env). OpenClaw validates keys
-  // strictly: check with `openclaw doctor` inside the pod for the version in use.
+  // OpenClaw configuration for the AIOps POC (JSON5, OpenClaw 2026.9.8).
+  // Based on the RHOAI agentic starter kit config (agents/openclaw/deployment/manifests),
+  // extended with the POC control layers. ${VAR} values are interpolated by OpenClaw from
+  // the container environment (Secret openclaw-secrets + ConfigMap openclaw-env).
+  // Validated with `openclaw config validate` against the pinned image.
+  //
+  // NOTE: the starter kit seeds this file only on the FIRST start; afterwards OpenClaw owns
+  // the copy on the PVC. Apply later changes with `openclaw config patch` (see
+  // docs/installation.md) AND update this file.
 
   "gateway": {
-    "mode": "local",
-    "bind": "lan",
     "port": 18789,
-    "auth": { "mode": "token", "token": "${OPENCLAW_GATEWAY_TOKEN}" },
-    "controlUi": { "enabled": true }
+    "bind": "lan",
+    "mode": "local",
+    // Token comes from the OPENCLAW_GATEWAY_TOKEN env var (Secret openclaw-secrets).
+    "auth": { "mode": "token" },
+    "controlUi": {
+      "enabled": true,
+      // Route origin, needed to use the Control UI through the OpenShift Route.
+      "allowedOrigins": ["${OPENCLAW_PUBLIC_ORIGIN}"]
+    }
   },
 
+  "channels": {},
+
+  // Model path: RHOAI MaaS (in-cluster gateway Service, service-CA TLS via
+  // NODE_EXTRA_CA_CERTS) with the agent subscription key -> per-agent token quota.
+  // NeMo Guardrails is NOT in this path: OpenClaw's openai-completions transport always
+  // streams, and NeMo accepts `tools` only on non-streaming requests (test-log F-09).
   "models": {
-    "mode": "merge",
+    "mode": "replace",
     "providers": {
-      "rhoai-maas": {
+      "rhoai": {
         "baseUrl": "${MAAS_BASE_URL}",
-        "apiKey": "${MAAS_API_KEY}",
         "api": "openai-completions",
+        // SecretRef: resolved from the env at runtime, never persisted (Secret openclaw-secrets)
+        "apiKey": { "source": "env", "provider": "default", "id": "MAAS_API_KEY" },
         "models": [
-          { "id": "${MAAS_MODEL}", "name": "AIOps POC model (via RHOAI MaaS)", "contextWindow": 128000, "maxTokens": 8192 }
+          {
+            "id": "${MAAS_MODEL}",
+            "name": "AIOps model (RHOAI MaaS)",
+            "reasoning": false,
+            "input": ["text"],
+            "contextWindow": 40960,          // qwen3-14b max_model_len on the internal MaaS
+            "maxTokens": 4096
+          }
         ]
       }
     }
@@ -28,68 +52,101 @@
 
   "agents": {
     "defaults": {
-      "model": { "primary": "rhoai-maas/${MAAS_MODEL}" },
-      "workspace": "/data/workspace",
-      "heartbeat": { "every": "${OPENCLAW_HEARTBEAT}" },
-      "sandbox": { "mode": "off" }
+      "model": "rhoai/${MAAS_MODEL}",
+      "sandbox": { "mode": "off" },
+      // Long heartbeat during the POC protects the quota (test case 5 shortens it).
+      "heartbeat": { "every": "${OPENCLAW_HEARTBEAT}" }
     }
   },
 
+  // Control layers 01/03: no shell, no filesystem, no web/browser, no node control, no
+  // gateway administration (group:openclaw), no cron/automation, no sub-agents.
+  // The agent acts on the cluster only through the MCP servers below.
+  // toolSearch=false: expose tool schemas directly; llama-scout-17b failed the meta-tool
+  // indirection (tool_search/tool_describe/tool_calls) but calls direct tools reliably (F-11).
   "tools": {
-    // Control layers 01/03: no shell, no file writes, no browser.
-    // The agent acts on the cluster only through MCP tools.
-    "deny": ["exec", "process", "write", "edit", "apply_patch", "browser", "canvas", "nodes"]
+    "toolSearch": false,
+    "deny": ["group:runtime", "group:fs", "group:web", "group:ui", "group:nodes",
+             "group:openclaw", "group:automation", "group:media", "group:agents", "browser"]
   },
 
-  // MCP servers. VERIFY the key name for the OpenClaw version in use (see docs/open-points.md).
   "mcp": {
     "servers": {
-      "kubernetes": { "transport": "streamable-http", "url": "http://kubernetes-mcp.aiops-tools.svc:8080/mcp" },
-      "prometheus": { "transport": "streamable-http", "url": "http://prometheus-mcp.aiops-tools.svc:8080/mcp" },
+      // Read-only (RBAC "view" on demo-apps + server read_only mode)
+      // toolFilter: only the read tools the incident procedure needs. Parameterless tools are
+      // left out on purpose: the internal MaaS streams them with arguments "" (test-log F-14).
+      "kubernetes": {
+        "transport": "streamable-http",
+        "url": "http://kubernetes-mcp.aiops-tools.svc:8080/mcp",
+        "requestTimeoutMs": 30000,
+        "toolFilter": {
+          "include": [
+            "pods_list_in_namespace", "pods_get", "pods_log", "pods_top",
+            "events_list", "resources_get", "resources_list"
+          ]
+        }
+      },
+      // Read-only metrics
+      "prometheus": {
+        "transport": "streamable-http",
+        "url": "http://prometheus-mcp.aiops-tools.svc:8080/mcp",
+        "requestTimeoutMs": 30000,
+        "toolFilter": { "include": ["execute_query", "execute_range_query"] }
+      },
+      // Ansible MCP server (AAP 2.6). Calls run with the AAP user "openclaw-agent" token, which
+      // may only launch the approval workflows and collect-diagnostics. toolFilter keeps the
+      // prompt small and drops every tool the procedure does not need (AGENTS.md).
       "ansible": {
         "transport": "streamable-http",
-        "url": "${AAP_MCP_URL}",
-        "headers": { "Authorization": "Bearer ${AAP_MCP_TOKEN}" }
+        "url": "http://aap-mcp.aap.svc:8086/job_management/mcp",
+        "headers": { "Authorization": "Bearer ${AAP_MCP_TOKEN}" },
+        "requestTimeoutMs": 60000,
+        "toolFilter": {
+          "include": [
+            "workflow_job_templates_list", "workflow_job_templates_retrieve",
+            "workflow_job_templates_launch_create", "workflow_jobs_list", "workflow_jobs_retrieve",
+            "workflow_jobs_workflow_nodes_list", "job_templates_list", "job_templates_launch_create",
+            "jobs_list", "jobs_retrieve", "jobs_stdout_retrieve"
+          ]
+        }
       }
     }
   },
 
+  // Alertmanager -> POST /hooks/alertmanager (Bearer OPENCLAW_HOOKS_TOKEN)
   "hooks": {
     "enabled": true,
     "token": "${OPENCLAW_HOOKS_TOKEN}",
     "path": "/hooks",
+    "allowedAgentIds": ["main"],
+    "allowRequestSessionKey": false,
     "mappings": [
       {
         "id": "alertmanager",
         "match": { "path": "alertmanager" },
         "action": "agent",
-        "name": "Alertmanager",
+        "agentId": "main",
+        "name": "Alert {{commonLabels.alertname}}",
         "wakeMode": "now",
-        "deliver": true,
-        "messageTemplate": "ALERT {{status}} from Alertmanager. alertname={{commonLabels.alertname}} namespace={{commonLabels.namespace}} severity={{commonLabels.severity}} summary={{commonAnnotations.summary}}. Follow the incident procedure in AGENTS.md: diagnose with read-only tools and report root cause and a proposed action."
+        "deliver": false,             // no chat channel in the POC; the answer stays in the session (Control UI)
+        "messageTemplate": "ALERT {{status}} from Alertmanager. alertname={{commonLabels.alertname}} namespace={{commonLabels.namespace}} pod={{commonLabels.pod}} severity={{commonLabels.severity}} summary={{commonAnnotations.summary}}. Follow the incident procedure in AGENTS.md: diagnose with read-only tools and report root cause and a proposed action."
       }
     ]
   },
 
+  // Traces -> OTel collector sidecar (localhost:4318) -> RHOAI MLflow (starter kit overlay)
   "plugins": {
+    "allow": ["diagnostics-otel"],
     "entries": { "diagnostics-otel": { "enabled": true } }
   },
-
-  // Traces to MLflow over OTLP/HTTP (control layer 05).
   "diagnostics": {
     "enabled": true,
     "otel": {
       "enabled": true,
-      "endpoint": "${MLFLOW_OTLP_ENDPOINT}",
-      "protocol": "http/protobuf",
-      "serviceName": "openclaw-aiops-agent",
+      "endpoint": "http://localhost:4318",
       "traces": true,
       "metrics": false,
-      "logs": false,
-      "headers": {
-        "Authorization": "Bearer ${MLFLOW_TOKEN}",
-        "x-mlflow-experiment-id": "${MLFLOW_EXPERIMENT_ID}"
-      }
+      "logs": false
     }
   }
 }

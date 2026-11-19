@@ -1,0 +1,31 @@
+# Rendered by scripts/render-config.sh into rendered/model.yaml (values from .env).
+# The internal Red Hat MaaS registered as an external OpenAI-compatible provider
+# (MaaS external models: Technology Preview in RHOAI 3.5). Consumers call
+#   https://<gateway>/aiops-models/aiops-model/v1/chat/completions  with "model": "aiops-model"
+# and the gateway maps it to targetModel upstream.
+#
+# Model path chosen for the agent (topology B, see docs/architecture.md):
+#   OpenClaw -> NeMo Guardrails -> MaaS (agent subscription/quota) -> internal Red Hat MaaS
+# Topology A (MaaS -> Guardrails) was tested and rejected: the NeMo server does not return
+# `usage`, so MaaS cannot count tokens and the per-agent quota would not apply.
+apiVersion: maas.opendatahub.io/v1alpha1
+kind: ExternalModel
+metadata:
+  name: aiops-model
+  namespace: aiops-models
+spec:
+  provider: openai
+  endpoint: ${MAAS_UPSTREAM_HOST}       # FQDN only, no scheme/path (TLS/443)
+  targetModel: ${MAAS_MODEL}
+  credentialRef:
+    name: upstream-maas-credentials     # key "api-key", label inference.llm-d.ai/ipp-managed=true
+---
+apiVersion: maas.opendatahub.io/v1alpha1
+kind: MaaSModelRef
+metadata:
+  name: aiops-model
+  namespace: aiops-models
+spec:
+  modelRef:
+    kind: ExternalModel
+    name: aiops-model

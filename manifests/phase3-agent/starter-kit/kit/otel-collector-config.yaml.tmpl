@@ -1,0 +1,48 @@
+# From the starter kit overlays/mlflow-tracing (OTel collector -> RHOAI MLflow), rendered by
+# scripts/render-config.sh. Bearer = projected SA token of openclaw-tracing; TLS = service CA.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+data:
+  config.yaml: |
+    extensions:
+      bearertokenauth:
+        filename: /var/run/secrets/kubernetes.io/serviceaccount/token
+    receivers:
+      otlp:
+        protocols:
+          http:
+            endpoint: "127.0.0.1:4318"
+    processors:
+      memory_limiter:
+        check_interval: 1s
+        limit_mib: 256
+        spike_limit_mib: 64
+      resource:
+        attributes:
+          - { key: service.namespace, value: openclaw, action: upsert }
+          - { key: deployment.environment, value: aiops-poc, action: upsert }
+      batch:
+        timeout: 5s
+        send_batch_size: 100
+    exporters:
+      otlphttp:
+        endpoint: "https://mlflow.redhat-ods-applications.svc.cluster.local:8443"
+        compression: none        # MLflow /v1/traces rejects gzip
+        tls:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt
+        headers:
+          X-MLFLOW-WORKSPACE: openclaw
+          x-mlflow-experiment-id: "${MLFLOW_EXPERIMENT_ID}"
+        auth:
+          authenticator: bearertokenauth
+      debug:
+        verbosity: basic
+    service:
+      extensions: [bearertokenauth]
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, resource, batch]
+          exporters: [otlphttp, debug]

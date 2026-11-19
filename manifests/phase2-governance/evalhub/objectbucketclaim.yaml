@@ -1,9 +1,0 @@
-# S3 bucket for EvalHub results.
-apiVersion: objectbucket.io/v1alpha1
-kind: ObjectBucketClaim
-metadata:
-  name: evalhub-results
-  namespace: aiops-governance
-spec:
-  generateBucketName: evalhub-results
-  storageClassName: openshift-storage.noobaa.io

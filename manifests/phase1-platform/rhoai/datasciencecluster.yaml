@@ -8,10 +8,16 @@ spec:
   components:
     dashboard:
       managementState: Managed
-    kserve:
-      managementState: Managed       # required by Models-as-a-Service
-      modelsAsService:
+    aigateway:
+      managementState: Managed       # AI gateway (3.5): hosts Models-as-a-Service
+      modelsAsAService:
         managementState: Managed     # MaaS: per-agent subscription + quota
+      batchGateway:
+        managementState: Removed
+    kserve:
+      managementState: Managed       # model serving stack used by the gateway
+      modelsAsService:
+        managementState: Removed     # deprecated in 3.5 (moved to aigateway.modelsAsAService)
       nim:
         managementState: Removed
       wva:
@@ -21,8 +27,6 @@ spec:
     mlflowoperator:
       managementState: Managed       # tracing of agent decisions
     # --- not used in this POC ---
-    aigateway:
-      managementState: Removed
     aipipelines:
       managementState: Removed
     feastoperator:

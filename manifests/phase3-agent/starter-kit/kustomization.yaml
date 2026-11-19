@@ -1,0 +1,9 @@
+# Plan A: OpenClaw deployed with the RHOAI agentic starter kit
+# (red-hat-data-services/agentic-starter-kits, agents/openclaw), plus the POC control
+# layers. Build: `oc kustomize manifests/phase3-agent/starter-kit` (needs git + network:
+# the kit is fetched as a remote base pinned to a commit).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base        # namespace, default-deny NetworkPolicies, ExternalSecret (POC)
+  - kit            # starter kit + POC overlay (namespace openclaw)

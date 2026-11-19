@@ -17,6 +17,7 @@ Examples:
 import argparse
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -77,6 +78,11 @@ SYSTEM = (
     "You are an SRE assistant operating an OpenShift cluster. "
     "Always use the provided tools to inspect or act. Call exactly one tool per turn."
 )
+# Some models (e.g. llama-scout-17b behind vLLM) sometimes write calls as pythonic text
+# with tool_choice=auto; this hint makes them use structured tool_calls. The same rule is
+# in the agent's AGENTS.md. Disable with --no-tool-hint to measure the raw behavior.
+TOOL_HINT = (" When you call a tool, use the native function-calling interface. "
+             "Never write a function call as plain text.")
 
 # (prompt, expected tool, expected args subset)
 SCENARIOS = [
@@ -112,6 +118,17 @@ def list_models(base, key):
         print(m.get("id"))
 
 
+# Pythonic call written as plain text, e.g. "[get_logs(namespace=demo-apps, pod=x)]".
+# This means the model chose a tool but the endpoint's tool parser did not convert it
+# into structured tool_calls - the agent would NOT execute it.
+TEXT_CALL = re.compile(r"^\s*\[?\s*([a-z_][a-z0-9_]*)\s*\((.*)\)\s*\]?\s*$", re.S)
+
+
+def detect_text_call(content):
+    m = TEXT_CALL.match(content or "")
+    return m.group(1) if m else None
+
+
 def args_match(expected, actual):
     for k, v in expected.items():
         a = actual.get(k)
@@ -130,6 +147,9 @@ def main():
     p.add_argument("--model", default=os.environ.get("MAAS_MODEL"))
     p.add_argument("--runs", type=int, default=3, help="repetitions per scenario")
     p.add_argument("--threshold", type=float, default=0.8, help="minimum accuracy to pass")
+    p.add_argument("--tool-choice", default="auto", choices=["auto", "required"],
+                   help="agents normally use 'auto'; 'required' isolates parser issues")
+    p.add_argument("--no-tool-hint", action="store_true", help="omit TOOL_HINT from the system prompt")
     p.add_argument("--list-models", action="store_true")
     p.add_argument("--json-out", help="write detailed results to this file")
     a = p.parse_args()
@@ -144,16 +164,16 @@ def main():
     if not a.model:
         sys.exit("Set MAAS_MODEL or --model")
 
-    results, total, tool_ok, full_ok, latencies = [], 0, 0, 0, []
+    results, total, tool_ok, full_ok, text_calls, latencies = [], 0, 0, 0, 0, []
     rate_headers = {}
     for prompt, exp_tool, exp_args in SCENARIOS:
         for i in range(a.runs):
             total += 1
             payload = {
                 "model": a.model,
-                "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": prompt}],
+                "messages": [{"role": "system", "content": SYSTEM + ("" if a.no_tool_hint else TOOL_HINT)}, {"role": "user", "content": prompt}],
                 "tools": TOOLS,
-                "tool_choice": "auto",
+                "tool_choice": a.tool_choice,
                 "temperature": 0,
             }
             t0 = time.time()
@@ -178,11 +198,15 @@ def main():
                     got_args = json.loads(calls[0]["function"].get("arguments") or "{}")
                 except json.JSONDecodeError:
                     got_args = {"_invalid_json": calls[0]["function"].get("arguments")}
+            text_tool = None if calls else detect_text_call(msg.get("content"))
+            text_calls += bool(text_tool)
             t_ok = got_tool == exp_tool
             f_ok = t_ok and args_match(exp_args, got_args)
             tool_ok += t_ok
             full_ok += f_ok
-            mark = "PASS" if f_ok else ("TOOL-ONLY" if t_ok else "FAIL")
+            mark = "PASS" if f_ok else ("TOOL-ONLY" if t_ok else ("TEXT-CALL" if text_tool else "FAIL"))
+            if text_tool:
+                got_tool = f"{text_tool} (as text)"
             print(f"[{mark:9}] {exp_tool:18} got={got_tool} args={json.dumps(got_args)}")
             results.append({"prompt": prompt, "run": i, "expected": exp_tool, "got": got_tool,
                             "args": got_args, "tool_ok": t_ok, "full_ok": f_ok})
@@ -193,6 +217,8 @@ def main():
     print(f"attempts:            {total}")
     print(f"right tool:          {tool_ok}/{total}")
     print(f"right tool + args:   {full_ok}/{total}  ({acc:.0%})")
+    print(f"tool call as text:   {text_calls}/{total}  (chosen but not parsed into tool_calls)")
+    print(f"tool_choice:         {a.tool_choice}  tool hint: {not a.no_tool_hint}")
     if latencies:
         print(f"avg latency:         {sum(latencies)/len(latencies):.2f}s")
     if rate_headers:
@@ -202,7 +228,8 @@ def main():
 
     if a.json_out:
         with open(a.json_out, "w") as f:
-            json.dump({"model": a.model, "accuracy": acc, "results": results}, f, indent=2)
+            json.dump({"model": a.model, "tool_choice": a.tool_choice, "accuracy": acc,
+                       "text_calls": text_calls, "results": results}, f, indent=2)
     sys.exit(0 if acc >= a.threshold else 2)
 
 

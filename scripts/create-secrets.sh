@@ -30,10 +30,18 @@ apply_secret poc-vault openclaw-agent-credentials \
 for ns in aiops-models aiops-governance; do
   if ns_exists "${ns}"; then
     apply_secret "${ns}" upstream-maas-credentials "api-key=${MAAS_INTERNAL_API_KEY:?set MAAS_INTERNAL_API_KEY}"
+    # lets the MaaS payload processor (IPP) read the upstream key
+    oc -n "${ns}" label secret upstream-maas-credentials inference.llm-d.ai/ipp-managed=true --overwrite >/dev/null
   else
     warn "Namespace ${ns} not found yet - rerun after Phase 2"
   fi
 done
+
+# Guardrails (standalone, outside the agent path - test-log F-09) calls MaaS as a separate
+# consumer, so its traffic never counts against the agent quota.
+if ns_exists aiops-governance && [[ -n "${OTHER_CONSUMER_MAAS_KEY:-}" ]]; then
+  apply_secret aiops-governance guardrails-maas-credentials "api-key=${OTHER_CONSUMER_MAAS_KEY}"
+fi
 
 # 3. Alertmanager -> OpenClaw webhook token
 if ns_exists demo-apps; then

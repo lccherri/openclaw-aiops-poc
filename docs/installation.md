@@ -22,13 +22,14 @@ flowchart LR
 | `oc` (logged in as cluster-admin) | Everything |
 | `python3` (3.9+, standard library only) | Model validation, rendering |
 | `ansible-core` + collections in [aap/config-as-code/requirements.yml](../aap/config-as-code/requirements.yml) | AAP configuration as code |
-| `curl`, `openssl` | Quota test, token generation |
+| `curl` | Quota test |
 
 ```bash
 cp .env.example .env
 # generate the OpenClaw tokens
-sed -i "s/^OPENCLAW_GATEWAY_TOKEN=.*/OPENCLAW_GATEWAY_TOKEN=\"$(openssl rand -hex 32)\"/" .env
-sed -i "s/^OPENCLAW_HOOKS_TOKEN=.*/OPENCLAW_HOOKS_TOKEN=\"$(openssl rand -hex 32)\"/" .env
+for v in OPENCLAW_GATEWAY_TOKEN OPENCLAW_HOOKS_TOKEN; do
+  sed -i "s/^$v=.*/$v=\"$(python3 -c 'import secrets; print(secrets.token_hex(32))')\"/" .env
+done
 ```
 
 The Git repository must be reachable by AAP (project sync). Publish it on GitHub first
@@ -53,6 +54,7 @@ monitoring, catalog packages, and that no GPU operator is installed. Read-only.
 make egress-check
 ```
 
+`MAAS_INTERNAL_URL` must be the **base** URL ending in `/v1` (not `/v1/chat/completions`).
 Runs a short-lived pod in `poc-preflight` that calls `${MAAS_INTERNAL_URL}/models` with
 the key mounted from a temporary Secret. **If this fails, stop here**: fix proxy,
 firewall or egress rules first.
@@ -72,6 +74,10 @@ make model-validate             # 5 scenarios x 3 runs, 3 fictitious tools
 | Usage policy allows lab logs (fictitious data) | Confirm with the internal MaaS owners |
 
 Record model, accuracy and limits in the test log. **NO-GO → switch models.**
+
+If the summary shows `tool call as text` > 0, the model chose a tool but the endpoint did not
+parse it into `tool_calls` (see test-log finding F-01). Compare with `--tool-choice required`
+and `--no-tool-hint` to isolate the cause.
 
 ### 3. Storage
 
@@ -103,7 +109,17 @@ RHCL is installed by the next target.
 ```bash
 make operators      # RHCL, RHOAI 3.5 (stable-3.5), AAP 2.6 (stable-2.6), External Secrets
 make platform       # ExternalSecretsConfig, Kuadrant, DataScienceCluster, AnsibleAutomationPlatform
+make maas-prereqs   # Gateway maas-default-gateway, PostgreSQL for MaaS, Authorino CA trust
 ```
+
+Known issues handled by the repository (details in the [test log](test-log.md#findings)):
+
+- If Kuadrant reports "Gateway API provider not installed", restart its operator pod once
+  RHOAI has created the GatewayClass:
+  `oc -n kuadrant-system delete pod -l app=kuadrant,control-plane=controller-manager`.
+- Do **not** set `public_base_url: ""` in the AAP CR (empty CSRF origin). If it happened,
+  delete `aap/aap-gateway-settings` once so the operator regenerates it.
+- Keep Authorino listener TLS disabled with RHCL 1.4.3 (`scripts/maas-prereqs.sh` does it).
 
 | Component | Verify |
 |---|---|
@@ -133,29 +149,25 @@ AnsibleMCPServer) and fix them before Phase 2. Record the differences in
 
 ## Phase 2: Model and governance
 
-### 8. Models-as-a-Service with the external model
-
-Follow [manifests/phase2-governance/maas/README.md](../manifests/phase2-governance/maas/README.md):
-register the internal MaaS as an external model, create the `openclaw-agent` and
-`other-consumer` subscriptions, generate the keys, and set `RHOAI_MAAS_URL`,
-`AGENT_MAAS_KEY` and `OTHER_CONSUMER_MAAS_KEY` in `.env`.
+### 8–11. Models-as-a-Service, Guardrails, MLflow, EvalHub
 
 ```bash
-scripts/01-maas-egress-check.sh "$RHOAI_MAAS_URL" AGENT_MAAS_KEY
-python3 model-validation/tool_calling_test.py --base-url "$RHOAI_MAAS_URL" --api-key "$AGENT_MAAS_KEY" --runs 1
+make governance       # aiops-model (external model), subscriptions, Guardrails, MLflow, EvalHub
+make maas-keys        # one key per consumer SA -> .env (AGENT_MAAS_KEY, OTHER_CONSUMER_MAAS_KEY, URLs)
+make governance       # re-run once: Guardrails now gets the agent key
+set -a; source .env; set +a
+python3 model-validation/tool_calling_test.py --base-url "$RHOAI_MAAS_URL" --api-key "$AGENT_MAAS_KEY" --model aiops-model --runs 1
+make evalhub          # Garak red-team scan (BENCHMARK=owasp_llm_top10 for the full scan)
 ```
 
-Fallback: leave `RHOAI_MAAS_URL` empty. `make render` then points the agent at
-`MAAS_INTERNAL_URL` and prints a warning.
+Consumers must send `"model": "aiops-model"` (the MaaS model name). Set
+`GUARDRAILS_ALLOWED_CIDRS` in `.env` (cluster egress IP + machine network) before
+`make governance`: the TrustyAI operator exposes Guardrails through a public Route.
 
-### 9–11. Guardrails, MLflow, EvalHub
+Fallback (MaaS external model not working): leave `RHOAI_MAAS_INTERNAL_URL` empty. `make render`
+then points Guardrails straight at `MAAS_INTERNAL_URL` (no MaaS quota) and prints a warning.
 
-```bash
-make governance            # renders guardrails config, applies phase2-governance, creates secrets
-```
-
-| Item | Verify / do |
-|---|---|
+---|---|
 | NeMo Guardrails | `oc get nemoguardrails,pods -n aiops-governance`; test with a prompt containing `password: hunter2hunter2` → blocked |
 | Tool-call passthrough | Run `model-validation/tool_calling_test.py --base-url <guardrails-url>/v1`; if tools break, record the limitation |
 | MLflow | Open MLflow from the RHOAI dashboard; create the experiment `openclaw-aiops`; set `MLFLOW_TRACKING_URL`, `MLFLOW_EXPERIMENT_ID`, `MLFLOW_TOKEN` |
@@ -215,19 +227,32 @@ the pod label matches the `allow-egress-tools` NetworkPolicy (`app.kubernetes.io
 
 Applied by both deployment plans (`manifests/phase3-agent/base`).
 
-### 13. OpenClaw deployment
+### 13. OpenClaw deployment (RHOAI agentic starter kit)
 
-- **Plan A**: starter kit, see [starter-kit/README.md](../manifests/phase3-agent/starter-kit/README.md).
-- **Plan B**:
+The starter kit (`red-hat-data-services/agentic-starter-kits`, `agents/openclaw`) is used as a
+**kustomize remote base pinned to a commit**; `manifests/phase3-agent/starter-kit/kit` adds the
+POC layers:
+
+| Overlay change | Why |
+|---|---|
+| Kit Secret deleted; ESO generates `openclaw-secrets` | Identity layer: credentials come from `poc-vault` |
+| Kit ConfigMap replaced by `openclaw-poc-config` (`openclaw.json5`) | Model via MaaS, tools deny-list, MCP servers, hooks, tracing |
+| `seed-workspace` init container | Copies `AGENTS.md` (operating rules) on every start |
+| `otel-collector` sidecar (from the kit's `mlflow-tracing` overlay) | Traces to MLflow; the projected SA token is mounted **only** in this container |
+| `NODE_EXTRA_CA_CERTS` + service CA | Trust the MaaS gateway certificate |
+| PVC storage class | `ocs-external-storagecluster-ceph-rbd` instead of `gp3-csi` |
 
 ```bash
-make agent-plan-b
-oc -n openclaw get pods,externalsecret,networkpolicy
-oc -n openclaw exec deploy/openclaw -- node dist/index.js doctor     # config validation (VERIFY command)
+scripts/mlflow-experiment.sh       # workspace "openclaw", experiment openclaw-aiops -> .env
+make agent                         # render + secrets + oc apply -k manifests/phase3-agent/starter-kit
+make verify isolation              # 17/17 and 9/9 expected
+scripts/agent-alert.sh             # replay an alert; prints tool calls and the agent answer
 ```
 
-Open the Control UI (URL printed by the target) and authenticate with
-`OPENCLAW_GATEWAY_TOKEN`.
+The kit seeds `openclaw.json` **only on the first start**. To change a running agent, use
+`oc exec deploy/openclaw -c gateway -- node /app/dist/index.js config patch --stdin` and update
+`openclaw.json5` as well. Control UI through the Route: approve the browser device with
+`node /app/dist/index.js devices list|approve <id>` (see the kit's `raw-deployment.md`).
 
 ### 14–15. Model, traces and heartbeat
 
@@ -236,10 +261,10 @@ Configured in [openclaw.json5](../manifests/phase3-agent/openclaw/openclaw.json5
 
 | Setting | Value |
 |---|---|
-| Model provider | `rhoai-maas` → `MAAS_BASE_URL`, key `MAAS_API_KEY` (agent subscription) |
-| Traces | `diagnostics.otel` → `MLFLOW_OTLP_ENDPOINT` with header `x-mlflow-experiment-id` |
+| Model provider | `rhoai` → MaaS internal Service, key `MAAS_API_KEY` as SecretRef (agent subscription) |
+| Traces | `diagnostics.otel` → `localhost:4318` (sidecar) → MLflow `/v1/traces`, workspace `openclaw` |
 | Heartbeat | `OPENCLAW_HEARTBEAT=30m` (protects the quota) |
-| Native tools denied | `exec`, `process`, `write`, `edit`, `apply_patch`, `browser`, `canvas`, `nodes` |
+| Tools | `toolSearch: false`; denied groups: runtime, fs, web, ui, nodes, openclaw, automation, media, agents |
 
 Verify:
 
@@ -258,7 +283,7 @@ See [test-plan.md](test-plan.md) and record results in [test-log.md](test-log.md
 ```bash
 oc delete -k manifests/demo-apps
 oc delete -k manifests/phase4-tools
-oc delete -k manifests/phase3-agent/plan-b
+oc delete -k manifests/phase3-agent/starter-kit
 oc delete ns poc-vault aiops-models aiops-governance
 # Operators: delete AnsibleAutomationPlatform, DataScienceCluster, Kuadrant first, then the Subscriptions/CSVs.
 ```

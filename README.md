@@ -10,7 +10,7 @@ what the agent can do.
 
 | | |
 |---|---|
-| **Status** | Repository structured; implementation in progress (see [test log](docs/test-log.md)) |
+| **Status** | Phases 0-4 done; phase 5 (tests) started, see [test log](docs/test-log.md) |
 | **Scope** | Internal POC in a lab cluster. Fictitious applications and logs only |
 | **Reference date** | November 2026: OpenShift AI 3.5, AAP 2.6 (June 2026 update), OpenShift 4.22 |
 | **Constraint** | **No GPU.** Inference comes from an internal Red Hat MaaS (OpenAI-compatible API), so vLLM / llm-d are out of scope |
@@ -46,8 +46,7 @@ what the agent can do.
 | 06 | Action | **Event-Driven Ansible** for known events (no AI) | GA | Yes |
 | 07 | Scale | **Models-as-a-Service** with a per-agent quota | GA (3.4) | Yes |
 | 07 | Scale | MaaS pointing to an **external model** | Technology Preview (3.5) | Yes: this is what provides a quota without GPUs |
-| — | Deployment | OpenClaw starter kit (OpenShift AI 3.5) | Developer Preview | Try first (plan A) |
-| — | Deployment | OpenClaw deployed directly (Deployment + NetworkPolicy) | — | Plan B, [ready in this repo](manifests/phase3-agent/plan-b) |
+| — | Deployment | OpenClaw starter kit (OpenShift AI 3.5) | Developer Preview | **Used** (`agentic-starter-kits/agents/openclaw`) |
 | — | Isolation | OpenShell | Developer Preview | Out of scope |
 
 ## Architecture
@@ -92,7 +91,8 @@ flowchart LR
     VAULT --> ESO -- "only the agent's keys" --> OC
     MON -- "alert (webhook)" --> OC
     MON -- "known events" --> EDA
-    OC --> MAAS --> GR --> EXT
+    OC -- "agent MaaS key" --> MAAS --> EXT
+    GR -. "standalone consumer" .-> MAAS
     OC -. "traces (OTLP)" .-> MLF
     OC --> MK
     OC --> MP
@@ -112,8 +112,13 @@ Key design decisions:
   Each workflow starts with an approval node, and only the `poc-approver` user can approve it.
 - **Known events skip the model.** Alertmanager sends them straight to EDA, which gives a
   deterministic fix at zero inference cost.
-- **The order of MaaS and Guardrails is an open point.** Topology A (MaaS → Guardrails → model)
-  is the default; see [docs/architecture.md](docs/architecture.md#model-path-maas-and-guardrails-order).
+- **The agent reaches the model only through MaaS** (per-agent token quota). NeMo Guardrails
+  could not be placed in the agent path in this release (OpenClaw always streams; NeMo accepts
+  tools only without streaming), so it runs standalone, as the plan's risk table foresees. See
+  [docs/architecture.md](docs/architecture.md#model-path-maas-and-guardrails-order).
+- **OpenClaw is deployed with the RHOAI agentic starter kit** (kustomize remote base pinned to
+  a commit) plus a POC overlay: ESO-managed Secret, POC config, agent rules, MLflow tracing
+  sidecar (the only container with a ServiceAccount token).
 
 Details: [docs/architecture.md](docs/architecture.md).
 
@@ -124,7 +129,7 @@ sequenceDiagram
     autonumber
     participant AM as Alertmanager
     participant OC as OpenClaw
-    participant M as MaaS → Guardrails → model
+    participant M as MaaS → model
     participant MCP as Read-only MCP
     participant A as Ansible MCP / AAP
     actor H as Human (approver)
@@ -162,7 +167,7 @@ sequenceDiagram
 │   ├── phase1-operators/         # Subscriptions: RHCL, RHOAI 3.5, AAP 2.6, ESO
 │   ├── phase1-platform/          # Kuadrant, DataScienceCluster, AAP instance, ESO operand
 │   ├── phase2-governance/        # MaaS, NeMo Guardrails, MLflow, EvalHub
-│   ├── phase3-agent/             # namespace, NetworkPolicies, ExternalSecret, OpenClaw (plan A/B)
+│   ├── phase3-agent/             # namespace, NetworkPolicies, ExternalSecret, starter-kit overlay
 │   ├── phase4-tools/             # MCP servers (read-only), AAP SA, Ansible MCP server
 │   └── demo-apps/                # test apps (cases 1-4), PrometheusRules, Alertmanager routing
 ├── aap/
@@ -193,8 +198,9 @@ make operators platform           # RHCL, RHOAI 3.5, AAP 2.6, ESO
 make explain-crds                 # adjust TEMPLATE files to the served schemas
 make governance                   # MaaS, Guardrails, MLflow, EvalHub
 make demo-apps tools              # test apps, alerts, read-only MCP servers
-make aap-config ansible-mcp       # catalog, approval workflows, EDA, Ansible MCP
-make agent-plan-b                 # or the starter kit (plan A), see phase3-agent/starter-kit
+make maas-prereqs maas-keys       # MaaS gateway/DB/Authorino CA, one key per consumer
+make aap-config ansible-mcp       # catalog, approval workflows, EDA, Ansible MCP (in-cluster)
+make agent                        # OpenClaw via the RHOAI starter kit + POC overlay
 make verify                       # privilege checks: agent cannot write anything
 ```
 
@@ -228,9 +234,9 @@ Full runbook: [docs/installation.md](docs/installation.md). Test cases:
 |---|---|
 | Cluster has no route to the internal MaaS | Fix networking before any installation; the POC cannot proceed without it |
 | MaaS model weak at tool calling | Switch models after the pre-validation (`make model-validate`) |
-| OpenClaw starter kit (Developer Preview) does not work | Plan B: `make agent-plan-b` (own Deployment + default-deny) |
+| OpenClaw starter kit (Developer Preview) does not work | Not needed: the starter kit deployed successfully (plain Deployment + POC NetworkPolicies) |
 | MaaS with an external model (Technology Preview) does not work | OpenClaw calls the internal MaaS directly; quota shown only with the internal MaaS key limits |
-| Guardrails does not support the external model / tool calls | Record the limitation and continue without guardrails in phase 1 |
+| Guardrails does not support the external model / tool calls | **Happened** (OpenClaw streams; F-09): Guardrails runs standalone in phase 1 |
 | Internal MaaS quota exhausted | Long heartbeat (30 min); concentrate tests in short windows |
 | Not enough cluster resources | Lean DataScienceCluster and AAP without Automation Hub (already the default here) |
 
