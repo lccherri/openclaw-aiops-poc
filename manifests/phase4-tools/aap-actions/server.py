@@ -9,6 +9,9 @@ What it is NOT: a new authority. The server holds no credential. It forwards the
 the playbook guard and the approval nodes decide exactly as before. The allowlists below are
 defense in depth, not the control.
 
+Every argument is a STRING (ids and replicas included): the streaming tool parser of the model
+gateway drops the end of a call whose last argument is a number or an object (test-log F-18).
+
 MCP streamable HTTP (JSON responses, stateless), Python standard library only.
 """
 import json
@@ -44,10 +47,23 @@ TOOLS = [
                                             "wf-scale-deployment: set replicas (needs replicas)"},
                 "deployment": {"type": "string", "description": "Deployment name, e.g. checkout"},
                 "namespace": {"type": "string", "enum": NAMESPACES},
-                "replicas": {"type": "integer", "minimum": 1, "maximum": 5,
+                "replicas": {"type": "string", "enum": ["1", "2", "3", "4", "5"],
                              "description": "Only for wf-scale-deployment"},
             },
             "required": ["workflow", "deployment", "namespace"],
+        },
+    },
+    {
+        "name": "remediation_status",
+        "description": (
+            "Status of a remediation workflow launched with launch_remediation: whether the human "
+            "approval is PENDING, APPROVED, DENIED or TIMED OUT (and by whom), and the result of the "
+            "action job. Use it instead of interpreting raw AAP job states."),
+        "inputSchema": {
+            "type": "object",
+            "properties": {"workflow_job_id": {"type": "string", "pattern": "^[0-9]+$",
+                                               "description": "AAP workflow job id returned by launch_remediation, e.g. \"14\""}},
+            "required": ["workflow_job_id"],
         },
     },
     {
@@ -99,9 +115,42 @@ def launch(kind, name, extra_vars, auth):
     return True, job_id
 
 
+def remediation_status(job_id, auth):
+    st, wf = aap("GET", f"/workflow_jobs/{job_id}/", auth)
+    if st != 200:
+        return True, f"Workflow job {job_id} is not visible to this identity (HTTP {st})."
+    st, nodes = aap("GET", f"/workflow_jobs/{job_id}/workflow_nodes/", auth)
+    approval, action = "unknown", "not started"
+    for n in nodes.get("results", []):
+        job = n["summary_fields"].get("job") or {}
+        name = (n["summary_fields"].get("unified_job_template") or {}).get("name", "?")
+        if job.get("type") == "workflow_approval":
+            _, a = aap("GET", f"/workflow_approvals/{job['id']}/", auth)
+            who = (a.get("summary_fields", {}).get("approved_or_denied_by") or {}).get("username")
+            when = a.get("finished") or ""
+            approval = {"pending": "PENDING (waiting for a human in AAP)",
+                        "successful": f"APPROVED by {who} at {when}"}.get(a.get("status"))
+            if approval is None:
+                approval = (f"TIMED OUT at {when} (nobody decided)" if a.get("timed_out")
+                            else f"DENIED by {who} at {when}")
+        elif job.get("id"):
+            action = f"{name}: job {job['id']} {job.get('status')}"
+        else:
+            action = f"{name}: not started"
+    changed = "nothing was changed" if action.endswith("not started") else "see the action result"
+    return False, (f"Workflow job {job_id} ({wf.get('name')}): approval {approval}; action {action}; "
+                   f"{changed}. Workflow status: {wf.get('status')}.")
+
+
 def call_tool(name, args, auth):
     if not auth.lower().startswith("bearer "):
         return True, "Missing Authorization header: the caller's AAP token is required."
+    if name == "remediation_status":
+        try:
+            job_id = int(args.get("workflow_job_id"))
+        except (TypeError, ValueError):
+            return True, "workflow_job_id must be an integer."
+        return remediation_status(job_id, auth)
     ns = args.get("namespace")
     if ns not in NAMESPACES:
         return True, f"namespace must be one of {NAMESPACES}."

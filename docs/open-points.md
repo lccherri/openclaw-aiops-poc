@@ -28,12 +28,14 @@ cluster.
 | 13 | User-workload Thanos Ruler access to kube-state-metrics | ✅ Answered | `DemoAppCrashLooping` fired from the user-workload ruler |
 | 14 | MaaS gateway internal address | ✅ Answered | `maas-default-gateway-data-science-gateway-class.openshift-ingress.svc.cluster.local`, used by the agent and Guardrails (`RHOAI_MAAS_INTERNAL_URL`) |
 | 15 | Text-encoded tool calls from `llama-scout-17b` with `tool_choice=auto` | ✅ Superseded | Model changed to `qwen3-14b` (0/15 text-encoded calls without hint). Mitigation for llama in F-01 |
-| 16 | Corporate MaaS streaming tool-call parser (`qwen3-14b`) | 🔴 **Open, blocks case 2** | Empty arguments for parameterless calls (F-14, mitigated) and a missing closing brace for nested arguments (F-18, not mitigated: every AAP launch tool has a nested `requestBody`). Non-streaming is correct, but OpenClaw always streams. Options in D-5 |
+| 16 | Corporate MaaS streaming tool-call parser (`qwen3-14b`) | 🟡 **Mitigated** | The end of streamed arguments is lost when the last argument is not a string (F-14, F-18). Mitigated by string-only tools (launch layer) and detected by `model-validation/streaming_args_test.py`. Root fix: MaaS owners. `gpt-oss-120b` passes the streaming gate |
 
 ## Decisions
 
 | Date | Decision | Reason |
 |---|---|---|
+| 2026-11-19 | **Launch layer `aap-actions`** (intent-level MCP tools, string-only arguments, no credential) for launches and approval status; Ansible MCP kept for read tools | F-18 and F-20; narrower action surface without new authority (D-5) |
+| 2026-11-19 | Streaming argument gate added to `make model-validate` | The non-streaming gate passed a model that broke in OpenClaw (F-18) |
 | 2026-11-19 | Slack channel **tested, then disabled**; the repo keeps it optional (`make slack-enable`) | Proved the handoff (alert → channel → thread session). A corporate workspace needs admin approval; case 2 is blocked by F-18 regardless of the channel |
 | 2026-11-19 | Slack egress through an `EgressFirewall` with **explicit host names** | Wildcards need `DNSNameResolver`; an unsupported rule disables the whole firewall (F-16) |
 | 2026-11-19 | Alert runs only propose; no claims without a tool result (`AGENTS.md`) | The model claimed a launch that never happened (F-17) |
@@ -63,7 +65,7 @@ cluster.
 | D-2 | OpenClaw deployment path | ✅ RHOAI agentic starter kit (`red-hat-data-services/agentic-starter-kits/agents/openclaw`), link provided by the owner |
 | D-3 | Webhook alerts produce an empty agent reply (test-log F-12) | ✅ **Option (c)**: the owner added `qwen3-14b` to the corporate MaaS; the untrusted-content wrapper stays on (F-13). Options considered: (a) `allowUnsafeExternalContent: true` on the Alertmanager mapping only (blocked by the assistant's safety classifier; needs an explicit owner decision); (b) keep the wrapper and route alerts through a trusted path; (c) another model |
 | D-4 | Chat channel for the human handoff (test-log F-15) | ✅ **Tested in a separate Slack workspace, then disabled.** A corporate workspace needs admin approval to install the app (not requested). Repo ready: [slack-app-manifest.json](../manifests/phase3-agent/slack/slack-app-manifest.json), `make slack-enable`. Without it, case 2 starts from a new Control UI chat |
-| D-5 | How to unblock case 2 (F-18) | ⬜ **Pending.** Report to the corporate MaaS owners (reproduction in F-18), and/or a flat-argument launch tool in front of AAP (same `openclaw-agent` identity and approvals) |
+| D-5 | How to unblock case 2 (F-18) | ✅ **Launch layer** (owner's choice, as a pattern and not only a workaround). Reporting the parser bug to the corporate MaaS owners remains recommended (reproduction in F-18 and the streaming gate) |
 
 ## TEMPLATE / VERIFY inventory
 
@@ -75,4 +77,5 @@ cluster.
 | ~~`manifests/phase4-tools/ansible-mcp/ansiblemcpserver.yaml`~~ | ✅ Running (`mcp doctor ansible`) |
 | ~~`manifests/phase4-tools/mcp-prometheus/deployment.yaml`~~ | ✅ Running (6 tools, none mutating) |
 | ~~`aap/config-as-code/configure-aap.yml`~~ | ✅ Applied in-cluster with the AAP 2.6 EE |
+| `manifests/phase4-tools/aap-actions/server.py` | POC code: keep tool arguments string-only (F-18); re-check if AAP API fields change |
 | `manifests/phase3-agent/slack/slack-app-manifest.json` | The reduced scope list worked for posting and thread replies; re-check if the plugin version changes |

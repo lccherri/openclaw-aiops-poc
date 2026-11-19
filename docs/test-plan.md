@@ -72,9 +72,9 @@ from alert to diagnosis** (MTTR reference).
 
 **Preparation.** Case 1 in progress (application broken, diagnosis delivered).
 
-> **Status (2026-11-19): blocked.** With the corporate MaaS (`qwen3-14b`) the agent cannot
-> launch AAP workflows: the streamed tool call loses its closing brace (test-log F-18, D-5).
-> The steps below are the target procedure once that is fixed.
+> The agent launches and follows the workflow through the launch layer
+> (`aap-actions__launch_remediation`, `aap-actions__remediation_status`); see
+> [architecture](architecture.md#launch-layer-aap-actions). Executed: test-log Run 6.
 
 **Steps**
 
@@ -85,10 +85,10 @@ from alert to diagnosis** (MTTR reference).
      crashes because ConfigMap checkout-config-v2 has invalid JSON. Launch
      wf-rollback-deployment with deployment=checkout and namespace=demo-apps, and tell me the
      job id."*
-2. The agent launches `wf-rollback-deployment` through the Ansible MCP server and reports the job id.
+2. The agent launches `wf-rollback-deployment` with `launch_remediation` and reports the AAP workflow job id.
 3. Confirm the application is **still broken** while the approval is pending.
 4. As `poc-approver`, approve the workflow in AAP.
-5. The agent checks that `checkout` recovered and reports back.
+5. Ask the agent to check: it calls `remediation_status` and verifies that `checkout` recovered.
 
 **Expected**
 
@@ -104,7 +104,8 @@ from alert to diagnosis** (MTTR reference).
 
 | Where | What you should see | What it proves |
 |---|---|---|
-| Slack thread, or a new Control UI chat (see step 1) | Your request, the `ansible__workflow_job_templates_launch_create` call and the job id; the agent says it is waiting for approval | The agent acts only through the AAP catalog |
+| Slack thread, or a new Control UI chat (see step 1) | Your request, the `aap-actions__launch_remediation` call and the job id; the agent says it is waiting for approval | The agent acts only through the AAP catalog |
+| Launch layer audit: `oc -n aiops-tools logs deploy/aap-actions \| grep AUDIT` | `launch_remediation wf-rollback-deployment {...} -> workflow_job N` | Same job id as the agent reported and as AAP shows |
 | AAP (as `admin`): workflow job view | `wf-rollback-deployment` stopped at the approval node | No change happens without a human |
 | OpenShift console: pod `checkout-*` | Still CrashLoopBackOff while the approval is pending | Same as above, seen from the cluster (2.1) |
 | AAP (as `poc-approver`): workflow approvals | The pending approval; approve it (or deny it for 2.4) | The human decision point, recorded with user and time (2.2) |

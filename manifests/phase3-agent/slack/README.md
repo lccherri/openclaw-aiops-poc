@@ -3,7 +3,8 @@
 **Status: tested on 2026-11-19, then disabled (`make slack-disable`).** Socket Mode connected,
 alert diagnoses were posted to the channel, and a reply in the thread opened a normal agent
 session with the diagnosis in its history. The follow-up stopped at the AAP launch call, which
-the corporate MaaS mangles when streaming (docs/test-log.md F-18), not at the channel. Issues
+the corporate MaaS mangles when streaming (docs/test-log.md F-18), not at the channel; the
+launch layer added afterwards fixes that call (case 2 passed from the Control UI). Issues
 found on the way: F-16 (EgressFirewall, fixed) and F-17 (claimed launch, mitigated). Without
 the channel the POC works with the limitation described in
 [Without Slack](#without-slack-isolated-alert-sessions).

@@ -17,6 +17,7 @@ model-list: ## List models available in the corporate MaaS
 model-validate: ## Tool-calling pre-validation of MAAS_MODEL (go / no-go)
 	@mkdir -p evidence; set -a; source .env; set +a; \
 	python3 model-validation/tool_calling_test.py --runs 3 --json-out evidence/model-validation.json
+	@set -a; source .env; set +a; python3 model-validation/streaming_args_test.py --runs 3
 
 phase0: ## Enable user workload monitoring + dedicated Alertmanager
 	oc apply -k $(M)/phase0-environment

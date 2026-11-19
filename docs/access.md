@@ -126,6 +126,9 @@ Users (passwords in `.env`):
 - **Job output**: the playbook log of the action, including the namespace guard.
 - **Templates** as `openclaw-agent`: only `collect-diagnostics` and the three `wf-*`
   workflows are visible. That is the catalog boundary of the agent.
+- **Launch layer audit** (terminal): `oc -n aiops-tools logs deploy/aap-actions | grep AUDIT`
+  shows every launch the agent requested and the AAP job id it got, to compare with the chat
+  and with the Jobs list.
 
 ## AAP (Event-Driven Ansible)
 

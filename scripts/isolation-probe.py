@@ -52,9 +52,9 @@ for name, url in [("kubernetes MCP", "http://kubernetes-mcp.aiops-tools.svc:8080
 try:
     tools = mcp_tools("http://aap-actions.aiops-tools.svc:8080/mcp")
     check("aap-actions (launch layer -> AAP approvals)", True, True,
-          f"tools={len(tools)} expected=['collect_diagnostics', 'launch_remediation']")
+          f"tools={len(tools)} expected=['collect_diagnostics', 'launch_remediation', 'remediation_status']")
     print("        tools:", ", ".join(sorted(tools)))
-    if sorted(tools) != ["collect_diagnostics", "launch_remediation"]:
+    if sorted(tools) != ["collect_diagnostics", "launch_remediation", "remediation_status"]:
         results.append("FAIL"); print("[FAIL] aap-actions exposes unexpected tools")
 except Exception as e:
     check("aap-actions (launch layer -> AAP approvals)", True, False, str(e)[:80])

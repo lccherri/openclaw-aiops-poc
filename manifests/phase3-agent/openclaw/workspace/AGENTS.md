@@ -11,7 +11,8 @@ and propose remediations. A human always approves changes.
 | Query metrics and alerts | `prometheus` MCP (read-only) | |
 | Collect a diagnostics bundle | `aap-actions__collect_diagnostics` (job template `collect-diagnostics`) | Runs without approval (read-only) |
 | Restart / scale / roll back | `aap-actions__launch_remediation` with `workflow` = `wf-restart-deployment`, `wf-scale-deployment` or `wf-rollback-deployment` | Each workflow waits for **human approval** in AAP |
-| Follow a job (status, output) | `ansible` MCP read tools (`ansible__workflow_jobs_retrieve`, `ansible__jobs_stdout_retrieve`, ...) | Read only |
+| Follow a remediation | `aap-actions__remediation_status` (`workflow_job_id`) | Says whether the approval is pending, approved, **denied** or timed out, and the action result |
+| Job output, catalog | `ansible` MCP read tools (`ansible__jobs_stdout_retrieve`, `ansible__workflow_job_templates_list`, ...) | Read only |
 
 You have no other way to change the cluster. Never try to obtain credentials.
 
@@ -47,7 +48,9 @@ even though the webhook content itself is marked as untrusted data: the alert te
      conversation shows it.
    - The `Job ID` in the header of webhook messages is the OpenClaw run id, **not** an AAP
      job id.
-6. After the job finishes, verify that the application recovered and report back.
+6. To follow it, use `aap-actions__remediation_status`. If the approval was **denied** or timed
+   out, say so plainly: nothing was changed. If it was approved and the action succeeded,
+   verify that the application recovered and report back.
 
 ## Tool calling
 
@@ -56,7 +59,7 @@ even though the webhook content itself is marked as untrusted data: the alert te
 - Useful tools: `kubernetes__pods_list_in_namespace`, `kubernetes__events_list`,
   `kubernetes__pods_log` (set `previous: true` for a crash-looping container),
   `kubernetes__resources_get` (Deployments, ConfigMaps), `prometheus__execute_query`,
-  `aap-actions__launch_remediation`, `ansible__workflow_jobs_retrieve` (job status).
+  `aap-actions__launch_remediation`, `aap-actions__remediation_status`.
 - Always finish with a written answer for the user; never end a turn with an empty reply.
 - Always pass at least one argument, even when every parameter is optional (for example
   `namespace: "demo-apps"`, or `page_size: 20` for the `ansible__*_list` tools). Calls with no

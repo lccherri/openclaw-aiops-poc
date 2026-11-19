@@ -65,8 +65,14 @@ firewall or egress rules first.
 
 ```bash
 make model-list                 # choose a model with tool-calling support, set MAAS_MODEL
-make model-validate             # 5 scenarios x 3 runs, 3 fictitious tools
+make model-validate             # 5 scenarios x 3 runs, 3 fictitious tools + streamed argument shapes
 ```
+
+`make model-validate` runs two tests: `tool_calling_test.py` (right tool and arguments,
+non-streaming) and `streaming_args_test.py` (streamed calls with no arguments, a string, an
+integer or a nested object as the last argument: what OpenClaw actually sends; F-14, F-18).
+A model that fails the streaming shapes can still be used if every tool the agent calls keeps
+string-only arguments, as the launch layer does.
 
 | Check | Where |
 |---|---|
@@ -217,12 +223,20 @@ make secrets               # push AAP_MCP_TOKEN to poc-vault (ESO syncs it to th
 | Job templates | `restart-deployment`, `scale-deployment`, `rollback-deployment`, `collect-diagnostics`, `set-memory-limit` (EDA only) |
 | Workflows (approval → job) | `wf-restart-deployment`, `wf-scale-deployment`, `wf-rollback-deployment` |
 | Users | `openclaw-agent` (execute workflows + collect-diagnostics), `poc-approver` (approve), `eda-automation` (execute set-memory-limit) |
+| Launch layer | `aiops-tools/aap-actions` (deployed by `make tools`): `launch_remediation`, `remediation_status`, `collect_diagnostics`; forwards the agent's AAP token |
 | EDA | project `aiops-poc-rulebooks`, activation `aiops-known-events` (Service `aiops-known-events:5000`) |
 
 The agent reaches the Ansible MCP server at `http://aap-mcp.aap.svc:8086/job_management/mcp`
 (`openclaw.json5`), allowed by the NetworkPolicy for pods labeled
-`app.kubernetes.io/component: ansible-mcp-server`. OpenClaw exposes only 11 of its tools
-(`toolFilter`).
+`app.kubernetes.io/component: ansible-mcp-server`. OpenClaw exposes only 9 of its **read**
+tools (`toolFilter`); launches go through the launch layer at
+`http://aap-actions.aiops-tools.svc:8080/mcp` (same `AAP_MCP_TOKEN` header). Why:
+[architecture](architecture.md#launch-layer-aap-actions).
+
+```bash
+oc -n aiops-tools logs deploy/aap-actions          # "aap-actions listening on :8080 ..."
+make isolation                                     # aap-actions reachable with exactly 3 tools
+```
 
 ---
 
@@ -270,7 +284,7 @@ Configured in [openclaw.json5](../manifests/phase3-agent/openclaw/openclaw.json5
 | Traces | `diagnostics.otel` → `localhost:4318` (sidecar) → MLflow `/v1/traces`, workspace `openclaw` |
 | Heartbeat | `OPENCLAW_HEARTBEAT=30m` (protects the quota) |
 | Model | `qwen3-14b` behind `aiops-model`, `contextWindow` 40960 (test-log F-13) |
-| Tools | `toolSearch: false`; denied groups: runtime, fs, web, ui, nodes, openclaw, automation, media, agents; MCP `toolFilter` allowlists (F-14) |
+| Tools | `toolSearch: false`; denied groups: runtime, fs, web, ui, nodes, openclaw, automation, media, agents; MCP `toolFilter` allowlists (F-14); Ansible MCP read tools only + launch layer |
 | Alert mapping | `/hooks/alertmanager` → isolated run, `deliver: false` (no chat channel by default; see the optional Slack section) |
 
 Verify:

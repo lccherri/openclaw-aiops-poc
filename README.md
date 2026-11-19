@@ -10,7 +10,7 @@ what the agent can do.
 
 | | |
 |---|---|
-| **Status** | Phases 0-4 done. Phase 5: case 1 ✅; case 2 blocked by the corporate MaaS streaming tool parser (F-18); cases 3-5 ✅. See [test log](docs/test-log.md#current-status) |
+| **Status** | Phases 0-4 done. Phase 5: **all five test cases executed** (case 4 with one partial item). See [test log](docs/test-log.md#current-status) |
 | **Scope** | Internal POC in a lab cluster. Fictitious applications and logs only |
 | **Reference date** | November 2026: OpenShift AI 3.5, AAP 2.6 (June 2026 update), OpenShift 4.22 |
 | **Constraint** | **No GPU.** Inference comes from a corporate MaaS (OpenAI-compatible API), so vLLM / llm-d are out of scope |
@@ -42,7 +42,8 @@ what the agent can do.
 | 05 | Traceability | **MLflow tracing** (OpenTelemetry from OpenClaw) | GA (3.4) | Yes |
 | 05 | Traceability | **EvalHub** + automated red teaming (Garak) | GA (3.5) | Yes (model evaluation) |
 | 06 | Action | **AAP** job template catalog + **approval workflows** | GA | Yes |
-| 06 | Action | **Ansible MCP server** | GA (AAP 2.6, Jun/2026) | Yes |
+| 06 | Action | **Ansible MCP server** | GA (AAP 2.6, Jun/2026) | Yes: read tools (catalog, job status, output) |
+| 06 | Action | **Launch layer** `aap-actions`: intent-level MCP tools in front of AAP | POC code | Yes: launches and approval status ([why](docs/architecture.md#launch-layer-aap-actions)) |
 | 06 | Action | **Event-Driven Ansible** for known events (no AI) | GA | Yes |
 | 07 | Scale | **Models-as-a-Service** with a per-agent quota | GA (3.4) | Yes |
 | 07 | Scale | MaaS pointing to an **external model** | Technology Preview (3.5) | Yes: this is what provides a quota without GPUs |
@@ -73,10 +74,11 @@ flowchart LR
         subgraph TOOLS["ns: aiops-tools (read-only)"]
             MK["Kubernetes MCP<br/>view on demo-apps"]
             MP["Prometheus MCP<br/>metrics only"]
+            FAC["aap-actions<br/>launch layer"]
         end
 
         subgraph AAPNS["ns: aap · Ansible Automation Platform 2.6"]
-            AMCP["Ansible MCP server"]
+            AMCP["Ansible MCP server<br/>(read tools)"]
             CTRL["Automation Controller<br/>catalog + approval"]
             EDA["Event-Driven Ansible"]
         end
@@ -96,7 +98,9 @@ flowchart LR
     OC -. "traces (OTLP)" .-> MLF
     OC --> MK
     OC --> MP
-    OC --> AMCP --> CTRL -- "SA aap-automation<br/>(write only in demo-apps)" --> APP
+    OC -- "read: catalog, job output" --> AMCP --> CTRL
+    OC -- "launch_remediation<br/>(agent's AAP token)" --> FAC --> CTRL
+    CTRL -- "SA aap-automation<br/>(write only in demo-apps)" --> APP
     EDA --> CTRL
     EVH -. "evaluates" .-> EXT
     MK -. read .-> APP
@@ -110,6 +114,11 @@ Key design decisions:
   that can write to `demo-apps`.
 - **Every write action requires human approval.** The agent can only launch *workflows*.
   Each workflow starts with an approval node, and only the `poc-approver` user can approve it.
+- **The agent launches actions through intent-level tools.** `launch_remediation(workflow,
+  deployment, namespace)` and `remediation_status(job)` in a small launch layer replace the
+  generic AAP API calls: flat string arguments the model gets right, a narrower surface, and
+  plain answers ("denied by poc-approver"). The layer holds no credential: it forwards the
+  agent's AAP token, so AAP RBAC, surveys and approvals stay the control.
 - **Known events skip the model.** Alertmanager sends them straight to EDA, which gives a
   deterministic fix at zero inference cost.
 - **The agent reaches the model only through MaaS** (per-agent token quota). NeMo Guardrails
@@ -134,7 +143,7 @@ sequenceDiagram
     participant OC as OpenClaw
     participant M as MaaS → model
     participant MCP as Read-only MCP
-    participant A as Ansible MCP / AAP
+    participant A as Launch layer / AAP
     actor H as Human (approver)
     participant ML as MLflow
 
@@ -143,7 +152,7 @@ sequenceDiagram
     OC->>MCP: pods, events, logs, metrics
     OC-->>H: root cause + proposed action (chat)
     H->>OC: "go ahead with the rollback"
-    OC->>A: launch wf-rollback-deployment
+    OC->>A: launch_remediation(wf-rollback-deployment, checkout, demo-apps)
     A-->>H: approval request
     H->>A: approve
     A->>A: run rollback-deployment (SA aap-automation)
@@ -165,14 +174,14 @@ sequenceDiagram
 │   ├── test-plan.md              # test cases, expected results, evidence to collect
 │   ├── test-log.md               # test notebook: results of the executed tests
 │   └── open-points.md            # open questions, decisions, verification log
-├── model-validation/             # tool-calling pre-validation of the model (go / no-go)
+├── model-validation/             # model gate: tool calling + streamed argument shapes (go / no-go)
 ├── manifests/
 │   ├── phase0-environment/       # user workload monitoring + Alertmanager
 │   ├── phase1-operators/         # Subscriptions: RHCL, RHOAI 3.5, AAP 2.6, ESO
 │   ├── phase1-platform/          # Kuadrant, DataScienceCluster, AAP instance, ESO operand
 │   ├── phase2-governance/        # MaaS, NeMo Guardrails, MLflow, EvalHub
 │   ├── phase3-agent/             # namespace, NetworkPolicies, ExternalSecret, starter-kit overlay, optional Slack channel
-│   ├── phase4-tools/             # MCP servers (read-only), AAP SA, Ansible MCP server
+│   ├── phase4-tools/             # MCP servers (read-only), launch layer (aap-actions), AAP SA, Ansible MCP server
 │   └── demo-apps/                # test apps (cases 1-4), PrometheusRules, Alertmanager routing
 ├── aap/
 │   ├── playbooks/                # job template catalog (kubernetes.core)
@@ -238,7 +247,7 @@ Full runbook: [docs/installation.md](docs/installation.md). Test cases:
 |---|---|
 | Cluster has no route to the corporate MaaS | Fix networking before any installation; the POC cannot proceed without it |
 | MaaS model weak at tool calling | **Happened**: `llama-scout-17b` → `qwen3-14b` (F-01, F-12, F-13) |
-| Corporate MaaS streaming tool-call parser mangles arguments | **Open** (F-14, F-18): read tools work (allowlist mitigation); AAP launch tools fail, so the agent cannot launch workflows. Report to the MaaS owners, or put a flat-argument launch tool in front of AAP |
+| Corporate MaaS streaming tool-call parser mangles arguments | **Happened** (F-14, F-18): mitigated with string-only arguments in the launch layer; detected up front by `model-validation/streaming_args_test.py`. Root fix belongs to the MaaS owners |
 | OpenClaw starter kit (Developer Preview) does not work | Did not happen: the starter kit deployed successfully with the POC overlay |
 | MaaS with an external model (Technology Preview) does not work | OpenClaw calls the corporate MaaS directly; quota shown only with the corporate MaaS key limits |
 | Guardrails does not support the external model / tool calls | **Happened** (OpenClaw streams; F-09): Guardrails runs standalone in phase 1 |
