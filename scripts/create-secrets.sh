@@ -56,7 +56,7 @@ else
 fi
 
 # Force ESO to resync now if the ExternalSecret exists
-if oc get externalsecret openclaw-credentials -n openclaw >/dev/null 2>&1; then
-  oc annotate externalsecret openclaw-credentials -n openclaw force-sync="$(date +%s)" --overwrite >/dev/null
-  ok "ExternalSecret openclaw/openclaw-credentials resync requested"
+if oc get externalsecret openclaw-secrets -n openclaw >/dev/null 2>&1; then
+  oc annotate externalsecret openclaw-secrets -n openclaw force-sync="$(date +%s)" --overwrite >/dev/null
+  ok "ExternalSecret openclaw/openclaw-secrets resync requested"
 fi

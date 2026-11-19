@@ -66,7 +66,7 @@ flowchart TB
   compromised agent process has no direct path to the cluster.
 - The only model path is the MaaS gateway (quota). The agent cannot reach the internal Red
   Hat MaaS directly.
-- Verified with `make isolation` from the agent namespace (9/9).
+- Verified with `make isolation` from the agent namespace (10/10).
 - MCP servers in `aiops-tools` accept ingress only from the `openclaw` namespace. The agent
   cannot reach the AAP gateway itself (`make isolation`): it goes through the Ansible MCP
   server (reads) or the launch layer (launches), both with its own AAP token.
@@ -81,7 +81,7 @@ flowchart TB
 |---|---|---|---|
 | SA `openclaw/openclaw-tracing` (agent pod) | Projected token **only in the OTel sidecar** | Write traces to the MLflow workspace `openclaw` | Any Kubernetes API call; the gateway container has no token |
 | Agent MaaS key (`MAAS_API_KEY`, SecretRef) | ESO → `openclaw/openclaw-secrets` | Call `aiops-model` within the `openclaw-agent` quota | Exceed quota; reach the upstream directly |
-| AAP user `openclaw-agent` (`AAP_MCP_TOKEN`) | ESO → `openclaw-credentials` | Execute the 3 approval workflows and `collect-diagnostics` | Approve, edit templates, run `set-memory-limit` |
+| AAP user `openclaw-agent` (`AAP_MCP_TOKEN`) | ESO → `openclaw/openclaw-secrets` | Execute the 3 approval workflows and `collect-diagnostics` | Approve, edit templates, run `set-memory-limit` |
 | Launch layer `aiops-tools/aap-actions` | **No identity of its own**: forwards the caller's AAP token; no ServiceAccount token mounted | Whatever the caller may do in AAP, through 3 tools | Hold or reuse credentials; reach anything but the AAP gateway |
 | AAP user `poc-approver` | Human | Approve or deny workflow approvals | Edit templates |
 | AAP user `eda-automation` | EDA credential | Execute `set-memory-limit` | Anything else |
@@ -94,8 +94,8 @@ flowchart TB
 ```mermaid
 flowchart LR
     ENV[".env (workstation,<br/>never committed)"] -- scripts/create-secrets.sh --> V[("poc-vault/<br/>openclaw-agent-credentials")]
-    V -- "ESO SecretStore<br/>(SA eso-vault-reader,<br/>resourceNames-scoped)" --> S[("openclaw/<br/>openclaw-credentials")]
-    S -- envFrom --> OC[OpenClaw]
+    V -- "ESO SecretStore<br/>(SA eso-vault-reader,<br/>resourceNames-scoped)" --> S[("openclaw/<br/>openclaw-secrets")]
+    S -- "env (secretKeyRef)" --> OC[OpenClaw]
     ENV -- create-secrets.sh --> U[("aiops-models / aiops-governance<br/>upstream-maas-credentials")]
     U --> MAAS[MaaS / Guardrails / EvalHub]
 ```
@@ -252,7 +252,7 @@ sequenceDiagram
     OC->>M: model call containing the log (AGENTS.md: report it as possible prompt injection)
     Note over OC,M: Guardrails is not in the agent path (F-09); its rails are tested separately
     Note over OC,K: Even if the model "obeys":
-    OC--xK: delete → no such tool (--read-only) and RBAC = view
+    OC--xK: delete → no such tool (read-only mode) and RBAC = view
     OC--xA: no launch tool or catalog item deletes namespaces; AAP SA cannot delete
 ```
 

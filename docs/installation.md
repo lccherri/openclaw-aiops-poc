@@ -12,7 +12,7 @@ flowchart LR
 
 > Phase 4 creates objects the agent depends on (MCP servers, AAP token). In practice:
 > deploy `demo-apps` and `tools` **before** the agent and fill `AAP_MCP_TOKEN` before
-> starting OpenClaw. The order in the [Quick start](../README.md#quick-start) already
+> starting OpenClaw. The order in the [Running the POC](../README.md#running-the-poc) already
 > does this.
 
 ## Prerequisites
@@ -264,7 +264,7 @@ POC layers:
 ```bash
 scripts/mlflow-experiment.sh       # workspace "openclaw", experiment openclaw-aiops -> .env
 make agent                         # render + secrets + oc apply -k manifests/phase3-agent/starter-kit
-make verify isolation              # 17/17 and 9/9 expected
+make verify isolation              # 17/17 and 10/10 expected
 scripts/agent-alert.sh             # replay an alert; prints tool calls and the agent answer
 ```
 

@@ -1,6 +1,6 @@
 # Kubernetes/OpenShift MCP server (containers/kubernetes-mcp-server, the upstream of the
-# Red Hat openshift-mcp-server). --read-only exposes no mutating tools at all
-# (defense in depth on top of RBAC).
+# Red Hat openshift-mcp-server). read_only in config.yaml exposes no mutating tools at all
+# (defense in depth on top of RBAC; test-log F-08).
 apiVersion: apps/v1
 kind: Deployment
 metadata:

@@ -86,7 +86,7 @@ enable() {
 
 disable() {
   oc_claw config patch --stdin <<'JSON' || warn "config patch failed"
-{"channels":{"slack":{"enabled":false}},
+{"plugins":{"allow":["diagnostics-otel"]},"channels":{"slack":null},
  "hooks":{"mappings":[{"id":"alertmanager","match":{"path":"alertmanager"},"action":"agent","agentId":"main",
   "name":"Alert {{commonLabels.alertname}}","wakeMode":"now","deliver":false,
   "messageTemplate":"ALERT {{status}} from Alertmanager. alertname={{commonLabels.alertname}} namespace={{commonLabels.namespace}} pod={{commonLabels.pod}} severity={{commonLabels.severity}} summary={{commonAnnotations.summary}}. Follow the incident procedure in AGENTS.md: diagnose with read-only tools and report root cause and a proposed action."}]}}

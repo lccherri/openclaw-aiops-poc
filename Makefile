@@ -14,7 +14,7 @@ egress-check: ## Verify a pod can reach the corporate MaaS (/v1/models)
 model-list: ## List models available in the corporate MaaS
 	@set -a; source .env; set +a; python3 model-validation/tool_calling_test.py --list-models
 
-model-validate: ## Tool-calling pre-validation of MAAS_MODEL (go / no-go)
+model-validate: ## Model gate for MAAS_MODEL: tool calling + streamed argument shapes (go / no-go)
 	@mkdir -p evidence; set -a; source .env; set +a; \
 	python3 model-validation/tool_calling_test.py --runs 3 --json-out evidence/model-validation.json
 	@set -a; source .env; set +a; python3 model-validation/streaming_args_test.py --runs 3
@@ -87,7 +87,7 @@ demo-apps: ## Demo applications, PrometheusRules and Alertmanager routing
 	oc apply -k $(M)/demo-apps
 	@scripts/create-secrets.sh
 
-tools: ## Read-only MCP servers + AAP ServiceAccount scoped to demo-apps
+tools: ## Read-only MCP servers, launch layer (aap-actions), AAP ServiceAccount scoped to demo-apps
 	oc apply -k $(M)/phase4-tools
 
 aap-config: ## Configure AAP as code (catalog, workflows with approval, EDA)
@@ -100,7 +100,7 @@ ansible-mcp: ## Deploy the Ansible MCP server (validate the template first)
 verify: ## Privilege checks (success criteria #1 and #4)
 	@scripts/verify-agent-privileges.sh
 
-isolation: ## Network isolation probe from the agent namespace (MCP tools, blocked paths)
+isolation: ## Network isolation probe from the agent namespace (MCP tools, launch layer, blocked paths)
 	@set -a; source .env; set +a; \
 	POD_LABELS=app.kubernetes.io/name=openclaw scripts/incluster-python.sh openclaw scripts/isolation-probe.py \
 	  "$$(python3 -c 'import sys,urllib.parse;print(urllib.parse.urlparse(sys.argv[1]).hostname)' "$$MAAS_INTERNAL_URL")"
@@ -114,7 +114,7 @@ case%-reset: ## Reset a test case, e.g. make case1-reset
 status: ## Pods and recent events in demo-apps
 	@scripts/cases/run-case.sh 0 status
 
-evidence: ## Collect evidence into evidence/<timestamp>/
+evidence: ## Collect evidence (workloads, events, AAP jobs + approvals, launch audit) into evidence/<timestamp>/
 	@scripts/collect-evidence.sh
 
 ##@ Housekeeping

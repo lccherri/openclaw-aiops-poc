@@ -15,7 +15,7 @@ spec:
       - system:serviceaccount:aiops-models:maas-other-consumer
 ---
 # Agent quota. Sized for normal agent work: an OpenClaw turn carries a large prompt
-# (system prompt + ~47 tool schemas) and retries on errors; 150k tokens/h was exhausted
+# (system prompt + tool schemas: ~47 tools at the time) and retries on errors; 150k tokens/h was exhausted
 # by a few turns (test-log F-10). Test case 5 temporarily lowers it
 # (scripts/cases/run-case.sh 5 trigger) and restores it on reset.
 apiVersion: maas.opendatahub.io/v1alpha1

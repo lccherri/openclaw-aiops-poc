@@ -95,7 +95,11 @@ open the **Traces** tab.
 **What to look at.**
 
 - One trace per agent run, timed close to the alert. Compare its tool calls with the Control
-  UI.
+  UI. Most traces are gateway telemetry: agent runs are the ones whose root span is
+  `openclaw.harness.run` (`openclaw.trigger`: `cron` for alerts, `user` for chat).
+- A failed run still shows trace state `OK`: the error is on the `openclaw.model.call` span
+  (status `ERROR`). Traces carry no session id: match them to a session by time and tools
+  (test-log F-21).
 - Case 2: the trace that launched the workflow contains the Ansible MCP call (workflow launch)
   and nothing that changes the cluster directly.
 - Case 4: the tools the model *tried* to call after reading the malicious log.
@@ -191,7 +195,7 @@ Repeatable proofs that do not depend on reading a UI:
 | Command | Proves |
 |---|---|
 | `make verify` | The agent identity cannot write to the cluster, and the agent pod holds no cluster token (17 checks) |
-| `make isolation` | From the agent namespace, only the allowed services are reachable; the Kubernetes API, the Internet, Guardrails and the corporate MaaS are not (9 checks) |
+| `make isolation` | From the agent namespace, only the allowed services are reachable (MCP servers, launch layer with exactly 3 tools, MaaS gateway, MLflow); the Kubernetes API, the AAP gateway, the Internet, Guardrails and the corporate MaaS are not (10 checks) |
 | `make case5-trigger` | Quota burst: HTTP 429 for the agent key and HTTP 200 for the other consumer |
 | `scripts/agent-last-session.sh` | Tool calls and answer of the latest (or a given) agent session |
 | `make evidence` | Snapshot of pods, events, AAP jobs/approvals and the timeline into `evidence/` |

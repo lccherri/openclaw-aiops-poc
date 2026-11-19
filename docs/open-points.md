@@ -73,7 +73,7 @@ cluster.
 |---|---|
 | ~~MaaS, NemoGuardrails, MLflow, EvalHub manifests~~ | ✅ Validated against the served schemas on 2026-11-19 |
 | ~~`manifests/phase3-agent/openclaw/openclaw.json5`~~ | ✅ `config validate` with OpenClaw 2026.9.8 |
-| ~~`manifests/phase3-agent/base/networkpolicies.yaml`~~ | ✅ `make isolation` 9/9 |
+| ~~`manifests/phase3-agent/base/networkpolicies.yaml`~~ | ✅ `make isolation` 10/10 |
 | ~~`manifests/phase4-tools/ansible-mcp/ansiblemcpserver.yaml`~~ | ✅ Running (`mcp doctor ansible`) |
 | ~~`manifests/phase4-tools/mcp-prometheus/deployment.yaml`~~ | ✅ Running (6 tools, none mutating) |
 | ~~`aap/config-as-code/configure-aap.yml`~~ | ✅ Applied in-cluster with the AAP 2.6 EE |

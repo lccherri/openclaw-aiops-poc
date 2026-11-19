@@ -24,7 +24,9 @@ Rules for changing it:
   new tools with `model-validation/streaming_args_test.py`.
 - **No credential in the server.** It forwards the caller's `Authorization` header; AAP RBAC,
   surveys, the playbook guard and approval nodes stay the control.
-- Every launch is logged as `AUDIT ...` with the AAP job id (no headers, no tokens).
+- Every launch is logged as `AUDIT ...` with the AAP job id (no headers, no tokens). The pod log
+  is a convenience for the tests and is lost when the pod restarts: the durable record is the
+  AAP job history (who launched, who approved, when).
 
 ```bash
 make tools                                            # deploy / update
